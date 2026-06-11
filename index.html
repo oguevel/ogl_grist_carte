@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <!-- Inclusion de l'API Grist indispensable [2] -->
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+</head>
+<body>
+  <h3>Valeurs de la colonne :</h3>
+  <div id="liste-valeurs">Chargement des données...</div>
+
+  <script>
+    // 1. Initialisation : on demande l'accès en lecture et on définit la colonne attendue [4, 5]
+    grist.ready({
+      requiredAccess: 'read table',
+      columns: [{ name: "Cible", title: "Sélectionnez 'col1'", type: 'Text' }]
+    });
+
+    // 2. Abonnement aux données : se déclenche à chaque modification ou filtrage [6, 7]
+    grist.onRecords(function(records) {
+      const container = document.getElementById('liste-valeurs');
+      container.innerHTML = ''; // Nettoyage de l'affichage
+
+      // Utilisation de l'assistant de mappage pour récupérer les données [4, 8]
+      const mappedRecords = grist.mapColumnNames(records);
+
+      if (mappedRecords && mappedRecords.length > 0) {
+        const ul = document.createElement('ul');
+        mappedRecords.forEach(rec => {
+          const li = document.createElement('li');
+          // On affiche la valeur mappée sous le nom logique "Cible"
+          li.textContent = rec.Cible || "(vide)";
+          ul.appendChild(li);
+        });
+        container.appendChild(ul);
+      } else {
+        container.textContent = "Aucune donnée disponible ou mappage incorrect.";
+      }
+    });
+  </script>
+</body>
+</html>
