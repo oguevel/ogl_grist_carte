@@ -2,39 +2,52 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <!-- Inclusion de l'API Grist indispensable [2] -->
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 10px; }
+    .filter-info { font-size: 0.8em; color: #666; margin-bottom: 10px; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 5px; border-bottom: 1px solid #eee; }
+  </style>
 </head>
 <body>
-  <h3>Valeurs de la colonne :</h3>
-  <div id="liste-valeurs">Chargement des données...</div>
+  <div class="filter-info" id="status">En attente de données...</div>
+  <ul id="list"></ul>
 
   <script>
-    // 1. Initialisation : on demande l'accès en lecture et on définit la colonne attendue [4, 5]
+    const listEl = document.getElementById('list');
+    const statusEl = document.getElementById('status');
+
+    // 1. Initialisation : On demande l'accès et on définit le mappage
     grist.ready({
       requiredAccess: 'read table',
-      columns: [{ name: "Cible", title: "Sélectionnez 'col1'", type: 'Text' }]
+      columns: [{ name: "ColAicher", title: 'Colonne à afficher (ex: col1)', type: 'Text' }]
     });
 
-    // 2. Abonnement aux données : se déclenche à chaque modification ou filtrage [6, 7]
-    grist.onRecords(function(records) {
-      const container = document.getElementById('liste-valeurs');
-      container.innerHTML = ''; // Nettoyage de l'affichage
+    // 2. Utilisation de onRecords : Cette fonction est appelée automatiquement
+    // à chaque modification de filtre ou de données dans la vue parente.
+    grist.onRecords(function(records, mappings) {
+      // Nettoyage de la vue
+      listEl.innerHTML = '';
 
-      // Utilisation de l'assistant de mappage pour récupérer les données [4, 8]
+      // Vérification du mappage
       const mappedRecords = grist.mapColumnNames(records);
 
       if (mappedRecords && mappedRecords.length > 0) {
-        const ul = document.createElement('ul');
+        statusEl.textContent = `${mappedRecords.length} ligne(s) visible(s) (filtres appliqués)`;
+        
         mappedRecords.forEach(rec => {
           const li = document.createElement('li');
-          // On affiche la valeur mappée sous le nom logique "Cible"
-          li.textContent = rec.Cible || "(vide)";
-          ul.appendChild(li);
+          // On accède à la donnée via le nom défini dans 'columns' plus haut
+          li.textContent = rec.ColAicher || "(Vide)";
+          listEl.appendChild(li);
         });
-        container.appendChild(ul);
       } else {
-        container.textContent = "Aucune donnée disponible ou mappage incorrect.";
+        statusEl.textContent = "Aucune donnée reçue. Vérifiez le filtrage ou le mappage.";
+        const li = document.createElement('li');
+        li.style.color = "orange";
+        li.textContent = "Astuce : Vérifiez que 'Sélectionner par' est bien lié à 'vue_mere'.";
+        listEl.appendChild(li);
       }
     });
   </script>
