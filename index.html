@@ -1,24 +1,17 @@
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
 <script>
 
 grist.ready({
-  requiredAccess: 'read table',
-  allowSelectBy: true
+  requiredAccess: "read table"
 });
 
 grist.onRecords(records => {
-
-  console.log("=================================");
-  console.log("onRecords");
-  console.log("Nb lignes :", records.length);
-
+  console.log("onRecords", records.length);
 });
 
 grist.onRecord(record => {
-
-  console.log("=================================");
-  console.log("onRecord");
-  console.log(record);
-
+  console.log("onRecord", record);
 });
 
 </script>
