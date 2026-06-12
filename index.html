@@ -22,15 +22,29 @@
     // 1. Initialisation : On demande l'accès et on définit le mappage
     grist.ready({
       requiredAccess: 'read table',
-      columns: [{ name: "ColAicher", title: 'Colonne à afficher (ex: col1)', type: 'Text' }]
+      allowSelectBy: true,
+      columns: [
+        {
+          name: "ColAicher",
+          title: "Colonne à afficher",
+          type: "Text"
+        }
+      ]
     });
 
+
+    
     // 2. Utilisation de onRecords : Cette fonction est appelée automatiquement
     // à chaque modification de filtre ou de données dans la vue parente.
     grist.onRecords(function(records, mappings) {
       // Nettoyage de la vue
       listEl.innerHTML = '';
       console.log("OGL_001");
+      console.log("=== onRecords ===");
+      console.log("Date :", new Date());
+
+      console.log("records =", records);
+      console.log("mappings =", mappings);
 
       // Vérification du mappage
       const mappedRecords = grist.mapColumnNames(records);
