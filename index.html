@@ -3,54 +3,73 @@
 <head>
   <meta charset="utf-8">
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 10px; }
+    .filter-info { font-size: 0.8em; color: #666; margin-bottom: 10px; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 5px; border-bottom: 1px solid #eee; }
+  </style>
 </head>
 <body>
+  <title> OGL - version 1.0</title>
+  <div class="filter-info" id="status">En attente de données...</div>
+  <ul id="list"></ul>
 
-<pre id="log"></pre>
+  <script>
+    const listEl = document.getElementById('list');
+    const statusEl = document.getElementById('status');
 
-<script>
+    console.log("========================================================= OGL - version 2 ========================================================");
+    // 1. Initialisation : On demande l'accès et on définit le mappage
+    grist.ready({
+      requiredAccess: 'read table',
+      allowSelectBy: true,
+      columns: [
+        {
+          name: "ColAicher",
+          title: "Colonne à afficher",
+          type: "Text"
+        }
+      ]
+    });
 
-const log = document.getElementById("log");
 
-function write(msg) {
-  console.log(msg);
-  log.textContent += msg + "\n";
-}
+    
+    // 2. Utilisation de onRecords : Cette fonction est appelée automatiquement
+    // à chaque modification de filtre ou de données dans la vue parente.
+    grist.onRecords(function(records, mappings) {
+      // Nettoyage de la vue
+      listEl.innerHTML = '';
+      console.log("OGL_001");
+      console.log("=== onRecords ===");
+      console.log("Date :", new Date());
 
-grist.ready({
-  requiredAccess: "full"
-});
+      console.log("records =", records);
+      console.log("mappings =", mappings);
 
-(async () => {
+      // Vérification du mappage
+      const mappedRecords = grist.mapColumnNames(records);
 
-  write("API disponibles :");
-
-  write("grist.docApi = " + typeof grist.docApi);
-
-  if (grist.docApi) {
-
-    write("fetchTable = " + typeof grist.docApi.fetchTable);
-
-    try {
-
-      const data = await grist.docApi.fetchTable("Table_mere");
-
-      write("Lecture Table_mere OK");
-
-      write("Nb lignes : " + data.id.length);
-
-    } catch(e) {
-
-      write("Erreur Table_mere");
-
-      write(e.toString());
-
-    }
-
-  }
-
-})();
-</script>
-
+      if (mappedRecords && mappedRecords.length > 0) {
+        statusEl.textContent = `${mappedRecords.length} ligne(s) visible(s) (filtres appliqués)`;
+        console.log("OGL_002");
+        
+        mappedRecords.forEach(rec => {
+          const li = document.createElement('li');
+          // On accède à la donnée via le nom défini dans 'columns' plus haut
+          li.textContent = rec.ColAicher || "(Vide)";
+          listEl.appendChild(li);
+          console.log("OGL_003");
+        });
+      } else {
+        statusEl.textContent = "Aucune donnée reçue. Vérifiez le filtrage ou le mappage.";
+        const li = document.createElement('li');
+        li.style.color = "orange";
+        li.textContent = "Astuce : Vérifiez que 'Sélectionner par' est bien lié à 'vue_mere'.";
+        listEl.appendChild(li);
+        console.log("OGL_004");
+      }
+    });
+  </script>
 </body>
 </html>
