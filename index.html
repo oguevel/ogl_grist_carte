@@ -30,6 +30,7 @@
     grist.onRecords(function(records, mappings) {
       // Nettoyage de la vue
       listEl.innerHTML = '';
+      console.log("OGL nettoyage de la vue");
 
       // Vérification du mappage
       const mappedRecords = grist.mapColumnNames(records);
