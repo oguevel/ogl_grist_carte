@@ -6,39 +6,50 @@
 </head>
 <body>
 
-<h3>Diagnostic</h3>
-
 <pre id="log"></pre>
 
 <script>
 
 const log = document.getElementById("log");
 
-function add(msg)
-{
+function write(msg) {
   console.log(msg);
   log.textContent += msg + "\n";
 }
 
 grist.ready({
-  requiredAccess: "read table"
+  requiredAccess: "full"
 });
 
-grist.onRecords(records => {
-  add("onRecords : " + records.length);
-});
+(async () => {
 
-grist.onRecord(record => {
-  add("onRecord");
-});
+  write("API disponibles :");
 
-window.addEventListener("message", event => {
+  write("grist.docApi = " + typeof grist.docApi);
 
-  add("MESSAGE");
-  add(JSON.stringify(event.data));
+  if (grist.docApi) {
 
-});
+    write("fetchTable = " + typeof grist.docApi.fetchTable);
 
+    try {
+
+      const data = await grist.docApi.fetchTable("Table_mere");
+
+      write("Lecture Table_mere OK");
+
+      write("Nb lignes : " + data.id.length);
+
+    } catch(e) {
+
+      write("Erreur Table_mere");
+
+      write(e.toString());
+
+    }
+
+  }
+
+})();
 </script>
 
 </body>
