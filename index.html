@@ -1,17 +1,52 @@
-<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+</head>
+<body>
+
+<h3>Diagnostic Grist</h3>
+
+<pre id="log"></pre>
 
 <script>
 
+const log = document.getElementById("log");
+
+function write(msg) {
+  console.log(msg);
+  log.textContent += msg + "\n";
+}
+
 grist.ready({
-  requiredAccess: "read table"
+  requiredAccess: 'full'
 });
 
-grist.onRecords(records => {
-  console.log("onRecords", records.length);
-});
+async function testSystemTables() {
 
-grist.onRecord(record => {
-  console.log("onRecord", record);
-});
+  try {
+
+    write("Lecture _grist_Filters ...");
+
+    const filters = await grist.docApi.fetchTable("_grist_Filters");
+
+    write("OK");
+
+    write(JSON.stringify(filters, null, 2));
+
+  } catch(e) {
+
+    write("ERREUR");
+    write(e.toString());
+
+  }
+
+}
+
+testSystemTables();
 
 </script>
+
+</body>
+</html>
