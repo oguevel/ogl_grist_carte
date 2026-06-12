@@ -16,17 +16,23 @@
   <ul id="list"></ul>
 
   <script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<script>
+
 grist.ready({
-  requiredAccess: 'read table'
+  requiredAccess: "read table"
 });
 
-window.addEventListener("message", function(event) {
-
-  console.log("=================================");
-  console.log("MESSAGE RECU");
-  console.log(event.data);
-
+grist.onRecords(records => {
+  console.log("onRecords", records.length);
 });
+
+grist.onRecord(record => {
+  console.log("onRecord", record);
+});
+
+</script>
 
   </script>
 </body>
