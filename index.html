@@ -1,58 +1,24 @@
 <script>
-const listEl = document.getElementById('list');
-const statusEl = document.getElementById('status');
 
 grist.ready({
   requiredAccess: 'read table',
-  columns: [
-    {
-      name: "ColAicher",
-      title: "Colonne à afficher",
-      type: "Text"
-    }
-  ]
+  allowSelectBy: true
 });
 
-function afficherDonnees(records) {
+grist.onRecords(records => {
 
-  console.log("================================");
-  console.log("Mise à jour détectée");
-  console.log("Nombre de lignes :", records.length);
+  console.log("=================================");
+  console.log("onRecords");
+  console.log("Nb lignes :", records.length);
 
-  listEl.innerHTML = "";
-
-  const mappedRecords = grist.mapColumnNames(records);
-
-  if (!mappedRecords || mappedRecords.length === 0) {
-
-    statusEl.textContent = "Aucune donnée visible";
-
-    return;
-  }
-
-  statusEl.textContent =
-    `${mappedRecords.length} ligne(s) visible(s)`;
-
-  mappedRecords.forEach(rec => {
-
-    const li = document.createElement("li");
-
-    li.textContent = rec.ColAicher || "(Vide)";
-
-    listEl.appendChild(li);
-  });
-}
-
-grist.onRecords((records) => {
-
-  console.log("onRecords déclenché");
-
-  afficherDonnees(records);
 });
 
-grist.onRecord((record) => {
+grist.onRecord(record => {
 
-  console.log("onRecord déclenché");
+  console.log("=================================");
+  console.log("onRecord");
   console.log(record);
+
 });
+
 </script>
