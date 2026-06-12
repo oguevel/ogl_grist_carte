@@ -30,19 +30,21 @@
     grist.onRecords(function(records, mappings) {
       // Nettoyage de la vue
       listEl.innerHTML = '';
-      console.log("OGL nettoyage de la vue");
+      console.log("OGL_001");
 
       // Vérification du mappage
       const mappedRecords = grist.mapColumnNames(records);
 
       if (mappedRecords && mappedRecords.length > 0) {
         statusEl.textContent = `${mappedRecords.length} ligne(s) visible(s) (filtres appliqués)`;
+        console.log("OGL_002");
         
         mappedRecords.forEach(rec => {
           const li = document.createElement('li');
           // On accède à la donnée via le nom défini dans 'columns' plus haut
           li.textContent = rec.ColAicher || "(Vide)";
           listEl.appendChild(li);
+          console.log("OGL_003");
         });
       } else {
         statusEl.textContent = "Aucune donnée reçue. Vérifiez le filtrage ou le mappage.";
@@ -50,6 +52,7 @@
         li.style.color = "orange";
         li.textContent = "Astuce : Vérifiez que 'Sélectionner par' est bien lié à 'vue_mere'.";
         listEl.appendChild(li);
+        console.log("OGL_004");
       }
     });
   </script>
