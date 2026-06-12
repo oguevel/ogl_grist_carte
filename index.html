@@ -6,7 +6,7 @@
 </head>
 <body>
 
-<h3>Diagnostic Grist</h3>
+<h3>Diagnostic</h3>
 
 <pre id="log"></pre>
 
@@ -14,37 +14,30 @@
 
 const log = document.getElementById("log");
 
-function write(msg) {
+function add(msg)
+{
   console.log(msg);
   log.textContent += msg + "\n";
 }
 
 grist.ready({
-  requiredAccess: 'full'
+  requiredAccess: "read table"
 });
 
-async function testSystemTables() {
+grist.onRecords(records => {
+  add("onRecords : " + records.length);
+});
 
-  try {
+grist.onRecord(record => {
+  add("onRecord");
+});
 
-    write("Lecture _grist_Filters ...");
+window.addEventListener("message", event => {
 
-    const filters = await grist.docApi.fetchTable("_grist_Filters");
+  add("MESSAGE");
+  add(JSON.stringify(event.data));
 
-    write("OK");
-
-    write(JSON.stringify(filters, null, 2));
-
-  } catch(e) {
-
-    write("ERREUR");
-    write(e.toString());
-
-  }
-
-}
-
-testSystemTables();
+});
 
 </script>
 
