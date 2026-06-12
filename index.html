@@ -6,8 +6,6 @@
 </head>
 <body>
 
-<h3>Diagnostic Grist</h3>
-
 <pre id="log"></pre>
 
 <script>
@@ -20,32 +18,38 @@ function write(msg) {
 }
 
 grist.ready({
-  requiredAccess: 'full'
+  requiredAccess: "full"
 });
 
-async function testSystemTables() {
+(async () => {
 
-  try {
+  write("API disponibles :");
 
-    write("Lecture _grist_Filters ...");
+  write("grist.docApi = " + typeof grist.docApi);
 
-    const filters = await grist.docApi.fetchTable("_grist_Filters");
+  if (grist.docApi) {
 
-    write("OK");
+    write("fetchTable = " + typeof grist.docApi.fetchTable);
 
-    write(JSON.stringify(filters, null, 2));
+    try {
 
-  } catch(e) {
+      const data = await grist.docApi.fetchTable("Table_mere");
 
-    write("ERREUR");
-    write(e.toString());
+      write("Lecture Table_mere OK");
+
+      write("Nb lignes : " + data.id.length);
+
+    } catch(e) {
+
+      write("Erreur Table_mere");
+
+      write(e.toString());
+
+    }
 
   }
 
-}
-
-testSystemTables();
-
+})();
 </script>
 
 </body>
