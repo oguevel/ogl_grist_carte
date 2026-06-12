@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<meta charset="utf-8">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 </head>
 <body>
 
@@ -18,38 +18,23 @@ function write(msg) {
 }
 
 grist.ready({
-  requiredAccess: "full"
+  requiredAccess: 'read table'
 });
 
-(async () => {
+write("Version diagnostic");
 
-  write("API disponibles :");
+write("docApi = " + typeof grist.docApi);
 
-  write("grist.docApi = " + typeof grist.docApi);
+if (grist.docApi) {
 
-  if (grist.docApi) {
+  write("Méthodes disponibles :");
 
-    write("fetchTable = " + typeof grist.docApi.fetchTable);
-
-    try {
-
-      const data = await grist.docApi.fetchTable("Table_mere");
-
-      write("Lecture Table_mere OK");
-
-      write("Nb lignes : " + data.id.length);
-
-    } catch(e) {
-
-      write("Erreur Table_mere");
-
-      write(e.toString());
-
-    }
-
+  for (const k in grist.docApi) {
+    write(k);
   }
 
-})();
+}
+
 </script>
 
 </body>
