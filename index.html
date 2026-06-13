@@ -9,7 +9,7 @@
 <pre id="log"></pre>
 
 <script>
-console.log("=====================================OGL 10:44 =================================================")
+console.log("=====================================OGL 10:50 =================================================")
 const log = document.getElementById("log");
 
 function write(msg) {
@@ -81,6 +81,45 @@ grist.ready({
 
   }
 
+  try {
+
+  write("");
+  write("Lecture _grist_Views_section");
+
+  const sections =
+    await grist.docApi.fetchTable("_grist_Views_section");
+
+  write("OK");
+
+  write(JSON.stringify(sections, null, 2));
+
+}
+catch(e) {
+
+  write("ERREUR _grist_Views_section");
+  write(e.toString());
+
+}
+
+try {
+
+  write("");
+  write("Lecture _grist_Tables");
+
+  const tables =
+    await grist.docApi.fetchTable("_grist_Tables");
+
+  write("OK");
+
+  write(JSON.stringify(tables, null, 2));
+
+}
+catch(e) {
+
+  write("ERREUR _grist_Tables");
+  write(e.toString());
+
+}
 })();
 
 </script>
