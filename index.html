@@ -11,7 +11,7 @@
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 
 <script>
-console.log("=====================================OGL 11h00 =================================================")
+
 const log = document.getElementById("log");
 
 function write(msg) {
@@ -19,75 +19,43 @@ function write(msg) {
   log.textContent += msg + "\n";
 }
 
+write("====================================================");
+write("ATTENTE EVENEMENTS GRIST");
+write("====================================================");
+
 grist.ready({
-  requiredAccess: "full"
+  requiredAccess: "read table"
 });
 
-async function diagnostic() {
 
-  write("====================================================");
-  write("DEBUT TEST");
-  write("====================================================");
+// --------------------------------------------------
+// Quand les lignes visibles changent
+// --------------------------------------------------
 
-  try {
-
-    // ------------------------------------------------
-    // TABLE COMPLETE
-    // ------------------------------------------------
-
-    write("");
-    write("TABLE COMPLETE (fetchTable)");
-    write("--------------------------------");
-
-    const tableComplete =
-      await grist.docApi.fetchTable("Table_mere");
-
-    write(JSON.stringify(tableComplete, null, 2));
-
-    // ------------------------------------------------
-    // TABLE SELECTIONNEE
-    // ------------------------------------------------
-
-    write("");
-    write("TABLE SELECTIONNEE (fetchSelectedTable)");
-    write("--------------------------------");
-
-    const tableSelectionnee =
-      await grist.docApi.fetchSelectedTable();
-
-    write(JSON.stringify(tableSelectionnee, null, 2));
-
-    // ------------------------------------------------
-    // ENREGISTREMENT SELECTIONNE
-    // ------------------------------------------------
-
-    write("");
-    write("ENREGISTREMENT SELECTIONNE");
-    write("--------------------------------");
-
-    const record =
-      await grist.docApi.fetchSelectedRecord();
-
-    write(JSON.stringify(record, null, 2));
-
-  }
-  catch(e) {
-
-    write("");
-    write("ERREUR");
-    write("--------------------------------");
-    write(e.toString());
-
-  }
+grist.onRecords(function(records) {
 
   write("");
-  write("====================================================");
-  write("FIN TEST");
-  write("====================================================");
+  write("=== onRecords ===");
 
-}
+  write("Nombre de lignes : " + records.length);
 
-diagnostic();
+  write(JSON.stringify(records, null, 2));
+
+});
+
+
+// --------------------------------------------------
+// Quand une ligne est sélectionnée
+// --------------------------------------------------
+
+grist.onRecord(function(record) {
+
+  write("");
+  write("=== onRecord ===");
+
+  write(JSON.stringify(record, null, 2));
+
+});
 </script>
 
 </body>
