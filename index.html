@@ -9,7 +9,8 @@
 <pre id="log"></pre>
 
 <script>
-console.log("=====================================OGL 10:50 =================================================")
+console.log("=====================================OGL 11h00 =================================================")
+
 const log = document.getElementById("log");
 
 function write(msg) {
@@ -17,21 +18,67 @@ function write(msg) {
   log.textContent += msg + "\n";
 }
 
-grist.ready({
-  requiredAccess: "full"
-});
+async function testTable(tableName) {
 
-(async function() {
+  write("");
+  write("====================================================");
+  write("TABLE : " + tableName);
+  write("====================================================");
 
-  write("=== DEBUT TEST DE 10:50===");
+  try {
+
+    const data = await grist.docApi.fetchTable(tableName);
+
+    write("OK");
+
+    write(JSON.stringify(data, null, 2));
+
+  }
+  catch(e) {
+
+    write("ERREUR");
+    write(e.toString());
+
+  }
+
+}
+
+async function runDiagnostics() {
+
+  write("====================================================");
+  write("DEBUT DIAGNOSTIC");
+  write("====================================================");
+
+  write("");
+
+  write("API disponibles :");
+
+  if (grist.docApi) {
+
+    Object.keys(grist.docApi).forEach(key => {
+      write(" - " + key);
+    });
+
+  } else {
+
+    write("grist.docApi absent");
+    return;
+
+  }
+
+  write("");
+
+  write("====================================================");
+  write("LISTE DES TABLES");
+  write("====================================================");
 
   try {
 
     const tables = await grist.docApi.listTables();
 
-    write("TABLES DISPONIBLES :");
-
-    tables.forEach(t => write(t));
+    tables.forEach(table => {
+      write(table);
+    });
 
   }
   catch(e) {
@@ -41,87 +88,28 @@ grist.ready({
 
   }
 
-  try {
+  await testTable("_grist_Views");
 
-    write("");
-    write("Lecture _grist_Filters");
+  await testTable("_grist_Views_section");
 
-    const filters =
-      await grist.docApi.fetchTable("_grist_Filters");
+  await testTable("_grist_Tables");
 
-    write("OK");
+  await testTable("_grist_Tables_column");
 
-    write(JSON.stringify(filters, null, 2));
-
-  }
-  catch(e) {
-
-    write("ERREUR _grist_Filters");
-    write(e.toString());
-
-  }
-
-  try {
-
-    write("");
-    write("Lecture _grist_Views");
-
-    const views =
-      await grist.docApi.fetchTable("_grist_Views");
-
-    write("OK");
-
-    write(JSON.stringify(views, null, 2));
-
-  }
-  catch(e) {
-
-    write("ERREUR _grist_Views");
-    write(e.toString());
-
-  }
-
-  try {
+  await testTable("_grist_Filters");
 
   write("");
-  write("Lecture _grist_Views_section");
-
-  const sections =
-    await grist.docApi.fetchTable("_grist_Views_section");
-
-  write("OK");
-
-  write(JSON.stringify(sections, null, 2));
-
-}
-catch(e) {
-
-  write("ERREUR _grist_Views_section");
-  write(e.toString());
+  write("====================================================");
+  write("FIN DIAGNOSTIC 11h00");
+  write("====================================================");
 
 }
 
-try {
+grist.ready({
+  requiredAccess: "full"
+});
 
-  write("");
-  write("Lecture _grist_Tables");
-
-  const tables =
-    await grist.docApi.fetchTable("_grist_Tables");
-
-  write("OK");
-
-  write(JSON.stringify(tables, null, 2));
-
-}
-catch(e) {
-
-  write("ERREUR _grist_Tables");
-  write(e.toString());
-
-}
-})();
-
+runDiagnostics();
 </script>
 
 </body>
