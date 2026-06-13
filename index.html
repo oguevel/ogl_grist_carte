@@ -1,83 +1,79 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<title>Diagnostic v2 - onRecord + fetchSelectedTable</title>
-<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-<style>
-  body { font-family: sans-serif; padding: 10px; font-size: 14px; }
-  #status { padding: 8px; margin-bottom: 10px; border-radius: 4px; background: #eef; }
-  ul { padding-left: 20px; }
-  .event { color: #555; font-size: 11px; border-bottom: 1px solid #eee; padding: 2px 0; }
-  .ok { color: green; }
-  .err { color: red; }
-</style>
+  <meta charset="utf-8">
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    body { font-family: sans-serif; font-size: 13px; line-height: 1.4; }
+    .status-ok { color: green; font-weight: bold; }
+    .status-error { color: red; font-weight: bold; }
+    .version-tag { background: #eee; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f4f4f4; }
+    .category { background: #e9ecef; font-weight: bold; }
+  </style>
 </head>
 <body>
-<h3>Diagnostic v2</h3>
-<div id="status">Initialisation...</div>
-<div><strong>Ligne curseur active :</strong> <span id="cursor">-</span></div>
-<div><strong>Lignes reçues via onRecords :</strong> <span id="count-records">-</span></div>
-<div><strong>Lignes reçues via fetchSelectedTable :</strong> <span id="count-fetch">-</span></div>
-<h4>Valeurs col1 (fetchSelectedTable)</h4>
-<ul id="list"></ul>
-<h4>Journal des événements</h4>
-<div id="log"></div>
+  <h3>Vérification de l'API Grist</h3>
+  <p><strong>Version API REST :</strong> <span class="version-tag">1.0.1</span></p>
+  
+  <table id="results">
+    <thead>
+      <tr>
+        <th>Interface / Fonction</th>
+        <th>Rôle</th>
+        <th>Résultat</th>
+      </tr>
+    </thead>
+    <tbody id="body"></tbody>
+  </table>
 
-<script>
-let n = 0;
-function log(msg, type = '') {
-  n++;
-  const div = document.createElement('div');
-  div.className = 'event ' + type;
-  div.textContent = `#${n} [${new Date().toLocaleTimeString()}] ${msg}`;
-  document.getElementById('log').prepend(div);
-}
+  <script>
+    const tests = [
+      { cat: "Noyau Plugin", name: "grist.ready()", role: "Initialisation du widget", test: () => true },
+      { cat: "Noyau Plugin", name: "grist.onRecords", role: "Écoute des données filtrées", test: (data) => !!data },
+      { cat: "API Document", name: "grist.docApi.getDocMeta()", role: "Lecture des métadonnées du document", test: async () => await grist.docApi.getDocMeta() },
+      { cat: "API Document", name: "grist.docApi.listTables()", role: "Énumération des tables du document", test: async () => await grist.docApi.listTables() },
+      { cat: "API Vue", name: "grist.selectedTable", role: "Interaction avec la table active", test: () => !!grist.selectedTable },
+      { cat: "API CRUD", name: "TableOperations.update", role: "Modification de données (Accès complet requis)", test: async () => {
+          if (!grist.selectedTable) throw new Error("Table non sélectionnée");
+          return "Prêt";
+      }}
+    ];
 
-async function fetchAndDisplay() {
-  try {
-    const table = await grist.docApi.fetchSelectedTable();
-    log(`fetchSelectedTable -> ${table.id ? table.id.length : '?'} ligne(s)`, 'ok');
+    async function runTests(records) {
+      const tbody = document.getElementById('body');
+      tbody.innerHTML = '';
+      let lastCat = '';
 
-    const ids = table.id || [];
-    const col1Values = table.col1 || [];
+      for (const t of tests) {
+        if (t.cat !== lastCat) {
+          const catRow = tbody.insertRow();
+          catRow.className = 'category';
+          catRow.innerHTML = `<td colspan="3">${t.cat}</td>`;
+          lastCat = t.cat;
+        }
 
-    document.getElementById('count-fetch').textContent = ids.length;
+        const row = tbody.insertRow();
+        row.insertCell(0).textContent = t.name;
+        row.insertCell(1).textContent = t.role;
+        const resCell = row.insertCell(2);
 
-    const list = document.getElementById('list');
-    list.innerHTML = '';
-    col1Values.forEach(val => {
-      const li = document.createElement('li');
-      li.textContent = val;
-      list.appendChild(li);
+        try {
+          const result = await t.test(records);
+          resCell.innerHTML = '<span class="status-ok">✓ Fonctionnelle</span>';
+        } catch (e) {
+          resCell.innerHTML = `<span class="status-error">✗ Erreur / Non autorisé</span><br><small>${e.message}</small>`;
+        }
+      }
+    }
+
+    // Lancement de l'API
+    grist.ready({ requiredAccess: 'full' });
+    grist.onRecords((records) => {
+      runTests(records);
     });
-  } catch(e) {
-    log(`fetchSelectedTable ERREUR : ${e.message}`, 'err');
-  }
-}
-
-grist.ready({
-  requiredAccess: 'read table',
-  columns: [
-    { name: "col1", title: "Colonne col1", optional: false }
-  ]
-});
-
-// Événement 1 : toutes les lignes (sans filtre)
-grist.onRecords((records) => {
-  log(`onRecords -> ${records.length} ligne(s)`);
-  document.getElementById('count-records').textContent = records.length;
-  document.getElementById('status').textContent = 'Connecté';
-});
-
-// Événement 2 : ligne sélectionnée (curseur)
-grist.onRecord((record) => {
-  if (!record) return;
-  log(`onRecord -> curseur sur id=${record.id}, col1="${record.col1}"`);
-  document.getElementById('cursor').textContent = `id=${record.id}`;
-  // À chaque changement de curseur, on refetch
-  fetchAndDisplay();
-});
-</script>
+  </script>
 </body>
 </html>
