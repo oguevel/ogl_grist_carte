@@ -6,9 +6,9 @@
 </head>
 <body>
 
-<pre id="log"></pre>
+<h3>Test événements Grist</h3>
 
-<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<pre id="log"></pre>
 
 <script>
 
@@ -20,7 +20,7 @@ function write(msg) {
 }
 
 write("====================================================");
-write("ATTENTE EVENEMENTS GRIST");
+write("ATTENTE EVENEMENTS");
 write("====================================================");
 
 grist.ready({
@@ -28,14 +28,14 @@ grist.ready({
 });
 
 
-// --------------------------------------------------
-// Quand les lignes visibles changent
-// --------------------------------------------------
+// ====================================================
+// EVENEMENT SUR LES LIGNES
+// ====================================================
 
 grist.onRecords(function(records) {
 
   write("");
-  write("=== onRecords ===");
+  write("=== onRecords DECLENCHE ===");
 
   write("Nombre de lignes : " + records.length);
 
@@ -44,18 +44,19 @@ grist.onRecords(function(records) {
 });
 
 
-// --------------------------------------------------
-// Quand une ligne est sélectionnée
-// --------------------------------------------------
+// ====================================================
+// EVENEMENT SUR UNE LIGNE
+// ====================================================
 
 grist.onRecord(function(record) {
 
   write("");
-  write("=== onRecord ===");
+  write("=== onRecord DECLENCHE ===");
 
   write(JSON.stringify(record, null, 2));
 
 });
+
 </script>
 
 </body>
