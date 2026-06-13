@@ -8,9 +8,10 @@
 
 <pre id="log"></pre>
 
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
 <script>
 console.log("=====================================OGL 11h00 =================================================")
-
 const log = document.getElementById("log");
 
 function write(msg) {
@@ -18,98 +19,75 @@ function write(msg) {
   log.textContent += msg + "\n";
 }
 
-async function testTable(tableName) {
-
-  write("");
-  write("====================================================");
-  write("TABLE : " + tableName);
-  write("====================================================");
-
-  try {
-
-    const data = await grist.docApi.fetchTable(tableName);
-
-    write("OK");
-
-    write(JSON.stringify(data, null, 2));
-
-  }
-  catch(e) {
-
-    write("ERREUR");
-    write(e.toString());
-
-  }
-
-}
-
-async function runDiagnostics() {
-
-  write("====================================================");
-  write("DEBUT DIAGNOSTIC");
-  write("====================================================");
-
-  write("");
-
-  write("API disponibles :");
-
-  if (grist.docApi) {
-
-    Object.keys(grist.docApi).forEach(key => {
-      write(" - " + key);
-    });
-
-  } else {
-
-    write("grist.docApi absent");
-    return;
-
-  }
-
-  write("");
-
-  write("====================================================");
-  write("LISTE DES TABLES");
-  write("====================================================");
-
-  try {
-
-    const tables = await grist.docApi.listTables();
-
-    tables.forEach(table => {
-      write(table);
-    });
-
-  }
-  catch(e) {
-
-    write("ERREUR listTables");
-    write(e.toString());
-
-  }
-
-  await testTable("_grist_Views");
-
-  await testTable("_grist_Views_section");
-
-  await testTable("_grist_Tables");
-
-  await testTable("_grist_Tables_column");
-
-  await testTable("_grist_Filters");
-
-  write("");
-  write("====================================================");
-  write("FIN DIAGNOSTIC 11h00");
-  write("====================================================");
-
-}
-
 grist.ready({
   requiredAccess: "full"
 });
 
-runDiagnostics();
+async function diagnostic() {
+
+  write("====================================================");
+  write("DEBUT TEST");
+  write("====================================================");
+
+  try {
+
+    // ------------------------------------------------
+    // TABLE COMPLETE
+    // ------------------------------------------------
+
+    write("");
+    write("TABLE COMPLETE (fetchTable)");
+    write("--------------------------------");
+
+    const tableComplete =
+      await grist.docApi.fetchTable("Table_mere");
+
+    write(JSON.stringify(tableComplete, null, 2));
+
+    // ------------------------------------------------
+    // TABLE SELECTIONNEE
+    // ------------------------------------------------
+
+    write("");
+    write("TABLE SELECTIONNEE (fetchSelectedTable)");
+    write("--------------------------------");
+
+    const tableSelectionnee =
+      await grist.docApi.fetchSelectedTable();
+
+    write(JSON.stringify(tableSelectionnee, null, 2));
+
+    // ------------------------------------------------
+    // ENREGISTREMENT SELECTIONNE
+    // ------------------------------------------------
+
+    write("");
+    write("ENREGISTREMENT SELECTIONNE");
+    write("--------------------------------");
+
+    const record =
+      await grist.docApi.fetchSelectedRecord();
+
+    write(JSON.stringify(record, null, 2));
+
+  }
+  catch(e) {
+
+    write("");
+    write("ERREUR");
+    write("--------------------------------");
+    write(e.toString());
+
+  }
+
+  write("");
+  write("====================================================");
+  write("FIN TEST");
+  write("====================================================");
+
+}
+
+diagnostic();
 </script>
 
 </body>
