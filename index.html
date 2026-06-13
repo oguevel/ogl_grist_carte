@@ -1,48 +1,75 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-</head>
-<body>
-
-<pre id="log"></pre>
-
 <script>
-console.log("====================================================OGL - DEBUT 10:17 =================================================");
+console.log("====================================================OGL 10:32================================================================"
 const log = document.getElementById("log");
 
-function write(msg)
-{
+function write(msg) {
   console.log(msg);
   log.textContent += msg + "\n";
 }
 
 grist.ready({
-  requiredAccess: 'read table'
+  requiredAccess: "full"
 });
 
-async function test()
-{
-  try
-  {
-    const table = await grist.docApi.fetchSelectedTable();
+(async function() {
 
-    write("TABLE RECUPEREE");
+  write("=== DEBUT ===");
 
-    write(JSON.stringify(table, null, 2));
+  try {
+
+    const tables = await grist.docApi.listTables();
+
+    write("TABLES DISPONIBLES :");
+
+    tables.forEach(t => write(t));
+
   }
-  catch(e)
-  {
-    write("ERREUR");
+  catch(e) {
 
+    write("ERREUR listTables");
     write(e.toString());
+
   }
-}
 
-test();
-console.log("====================================================OGL - FIN 10:17 =================================================");
+  try {
+
+    write("");
+    write("Lecture _grist_Filters");
+
+    const filters =
+      await grist.docApi.fetchTable("_grist_Filters");
+
+    write("OK");
+
+    write(JSON.stringify(filters, null, 2));
+
+  }
+  catch(e) {
+
+    write("ERREUR _grist_Filters");
+    write(e.toString());
+
+  }
+
+  try {
+
+    write("");
+    write("Lecture _grist_Views");
+
+    const views =
+      await grist.docApi.fetchTable("_grist_Views");
+
+    write("OK");
+
+    write(JSON.stringify(views, null, 2));
+
+  }
+  catch(e) {
+
+    write("ERREUR _grist_Views");
+    write(e.toString());
+
+  }
+
+})();
 </script>
-
-</body>
-</html>
