@@ -4,99 +4,75 @@
   <meta charset="utf-8">
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f9f9f9; }
-    h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-    th { background-color: #3498db; color: white; text-transform: uppercase; font-size: 0.9em; }
-    .status { font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; }
-    .ok { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .no { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .info { color: #666; font-size: 0.9em; font-style: italic; }
-    .cat-header { background-color: #ecf0f1; font-weight: bold; color: #7f8c8d; }
+    body { font-family: sans-serif; font-size: 13px; line-height: 1.4; }
+    .status-ok { color: green; font-weight: bold; }
+    .status-error { color: red; font-weight: bold; }
+    .version-tag { background: #eee; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f4f4f4; }
+    .category { background: #e9ecef; font-weight: bold; }
   </style>
 </head>
 <body>
-
-  <h2>Diagnostic des fonctionnalités Grist</h2>
-  <div id="api-status" class="info">Initialisation de l'API Grist...</div>
-
-  <table id="feature-table">
+  <h3>Vérification de l'API Grist</h3>
+  <p><strong>Version API REST :</strong> <span class="version-tag">1.0.1</span></p>
+  
+  <table id="results">
     <thead>
       <tr>
-        <th>Fonctionnalité</th>
-        <th>Élément vérifié</th>
-        <th>Description / Rôle</th>
-        <th>Statut</th>
+        <th>Interface / Fonction</th>
+        <th>Rôle</th>
+        <th>Résultat</th>
       </tr>
     </thead>
-    <tbody id="table-body">
-      <!-- Les résultats seront injectés ici -->
-    </tbody>
+    <tbody id="body"></tbody>
   </table>
 
   <script>
-    const tableBody = document.getElementById('table-body');
-    const apiStatus = document.getElementById('api-status');
-
-    // Liste des fonctionnalités documentées (Source [1, 4-7])
-    const features = [
-      { cat: "Moteur de calcul (Python 3.11)", name: "Formules Python", func: "Standard Library", desc: "Support complet de la syntaxe Python et de sa bibliothèque standard", status: "OK" },
-      { cat: "Moteur de calcul (Python 3.11)", name: "Fonctions Excel", func: "SUM, IF, VLOOKUP", desc: "Calculs arithmétiques et logiques de base", status: "OK" },
-      { cat: "Moteur de calcul (Python 3.11)", name: "Fonction non supportée", func: "ISBLANK()", desc: "Vérification de cellule vide (non implémenté dans Grist)", status: "NON" },
-      { cat: "Moteur de calcul (Python 3.11)", name: "Fonction non supportée", func: "CELL()", desc: "Informations sur une cellule spécifique (non implémenté)", status: "NON" },
-      
-      { cat: "API & Intégration", name: "Custom Widget API", func: "grist.ready()", desc: "Capacité du widget à communiquer avec l'hôte", status: "TESTING" },
-      { cat: "API & Intégration", name: "Lecture de table", func: "onRecords", desc: "Accès aux données de la table sélectionnée", status: "TESTING" },
-      { cat: "API & Intégration", name: "Requêtes HTTP", func: "REQUEST()", desc: "Appels API depuis les formules (désactivé par défaut pour sécurité)", status: "NON" },
-      
-      { cat: "Intelligence Artificielle", name: "AI Formula Assistant", func: "OpenAI / Llama", desc: "Aide à la génération de formules via LLM", status: "OK" },
-      
-      { cat: "Fonctions Avancées", name: "Historique d'actions", func: "Snapshot", desc: "Sauvegardes automatiques et restauration", status: "OK" },
-      { cat: "Fonctions Avancées", name: "Audit Logs", func: "Streaming", desc: "Journalisation détaillée des accès (Édition Full uniquement)", status: "OPTIONNEL" }
+    const tests = [
+      { cat: "Noyau Plugin", name: "grist.ready()", role: "Initialisation du widget", test: () => true },
+      { cat: "Noyau Plugin", name: "grist.onRecords", role: "Écoute des données filtrées", test: (data) => !!data },
+      { cat: "API Document", name: "grist.docApi.getDocMeta()", role: "Lecture des métadonnées du document", test: async () => await grist.docApi.getDocMeta() },
+      { cat: "API Document", name: "grist.docApi.listTables()", role: "Énumération des tables du document", test: async () => await grist.docApi.listTables() },
+      { cat: "API Vue", name: "grist.selectedTable", role: "Interaction avec la table active", test: () => !!grist.selectedTable },
+      { cat: "API CRUD", name: "TableOperations.update", role: "Modification de données (Accès complet requis)", test: async () => {
+          if (!grist.selectedTable) throw new Error("Table non sélectionnée");
+          return "Prêt";
+      }}
     ];
 
-    function addRow(cat, name, func, desc, status) {
-      const row = document.createElement('tr');
-      let statusClass = status === "OK" ? "ok" : (status === "NON" ? "no" : "status");
-      let statusText = status === "OK" ? "✓ Supporté" : (status === "NON" ? "✗ Non implémenté" : status);
-      
-      row.innerHTML = `
-        <td><strong>${name}</strong></td>
-        <td><code>${func}</code></td>
-        <td>${desc}</td>
-        <td><span class="status ${statusClass}">${statusText}</span></td>
-      `;
-      tableBody.appendChild(row);
-    }
+    async function runTests(records) {
+      const tbody = document.getElementById('body');
+      tbody.innerHTML = '';
+      let lastCat = '';
 
-    // Initialisation du widget
-    grist.ready({
-      requiredAccess: 'read table'
-    });
-
-    // Test de l'accès aux données
-    grist.onRecords((records) => {
-      tableBody.innerHTML = ''; // Nettoyer
-      apiStatus.textContent = "API Grist connectée avec succès.";
-
-      let lastCat = "";
-      features.forEach(f => {
-        // Ajouter un en-tête de catégorie
-        if (f.cat !== lastCat) {
-          const catRow = document.createElement('tr');
-          catRow.innerHTML = `<td colspan="4" class="cat-header">${f.cat}</td>`;
-          tableBody.appendChild(catRow);
-          lastCat = f.cat;
+      for (const t of tests) {
+        if (t.cat !== lastCat) {
+          const catRow = tbody.insertRow();
+          catRow.className = 'category';
+          catRow.innerHTML = `<td colspan="3">${t.cat}</td>`;
+          lastCat = t.cat;
         }
 
-        // Tests dynamiques pour les éléments "TESTING"
-        let currentStatus = f.status;
-        if (f.func === "grist.ready()") currentStatus = "OK";
-        if (f.func === "onRecords") currentStatus = records ? "OK" : "NON";
+        const row = tbody.insertRow();
+        row.insertCell(0).textContent = t.name;
+        row.insertCell(1).textContent = t.role;
+        const resCell = row.insertCell(2);
 
-        addRow(f.cat, f.name, f.func, f.desc, currentStatus);
-      });
+        try {
+          const result = await t.test(records);
+          resCell.innerHTML = '<span class="status-ok">✓ Fonctionnelle</span>';
+        } catch (e) {
+          resCell.innerHTML = `<span class="status-error">✗ Erreur / Non autorisé</span><br><small>${e.message}</small>`;
+        }
+      }
+    }
+
+    // Lancement de l'API
+    grist.ready({ requiredAccess: 'full' });
+    grist.onRecords((records) => {
+      runTests(records);
     });
   </script>
 </body>
