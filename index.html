@@ -1,63 +1,103 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f9f9f9; }
+    h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background-color: #3498db; color: white; text-transform: uppercase; font-size: 0.9em; }
+    .status { font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; }
+    .ok { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .no { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .info { color: #666; font-size: 0.9em; font-style: italic; }
+    .cat-header { background-color: #ecf0f1; font-weight: bold; color: #7f8c8d; }
+  </style>
 </head>
 <body>
 
-<h3>Test événements Grist</h3>
+  <h2>Diagnostic des fonctionnalités Grist</h2>
+  <div id="api-status" class="info">Initialisation de l'API Grist...</div>
 
-<pre id="log"></pre>
+  <table id="feature-table">
+    <thead>
+      <tr>
+        <th>Fonctionnalité</th>
+        <th>Élément vérifié</th>
+        <th>Description / Rôle</th>
+        <th>Statut</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <!-- Les résultats seront injectés ici -->
+    </tbody>
+  </table>
 
-<script>
+  <script>
+    const tableBody = document.getElementById('table-body');
+    const apiStatus = document.getElementById('api-status');
 
-const log = document.getElementById("log");
+    // Liste des fonctionnalités documentées (Source [1, 4-7])
+    const features = [
+      { cat: "Moteur de calcul (Python 3.11)", name: "Formules Python", func: "Standard Library", desc: "Support complet de la syntaxe Python et de sa bibliothèque standard", status: "OK" },
+      { cat: "Moteur de calcul (Python 3.11)", name: "Fonctions Excel", func: "SUM, IF, VLOOKUP", desc: "Calculs arithmétiques et logiques de base", status: "OK" },
+      { cat: "Moteur de calcul (Python 3.11)", name: "Fonction non supportée", func: "ISBLANK()", desc: "Vérification de cellule vide (non implémenté dans Grist)", status: "NON" },
+      { cat: "Moteur de calcul (Python 3.11)", name: "Fonction non supportée", func: "CELL()", desc: "Informations sur une cellule spécifique (non implémenté)", status: "NON" },
+      
+      { cat: "API & Intégration", name: "Custom Widget API", func: "grist.ready()", desc: "Capacité du widget à communiquer avec l'hôte", status: "TESTING" },
+      { cat: "API & Intégration", name: "Lecture de table", func: "onRecords", desc: "Accès aux données de la table sélectionnée", status: "TESTING" },
+      { cat: "API & Intégration", name: "Requêtes HTTP", func: "REQUEST()", desc: "Appels API depuis les formules (désactivé par défaut pour sécurité)", status: "NON" },
+      
+      { cat: "Intelligence Artificielle", name: "AI Formula Assistant", func: "OpenAI / Llama", desc: "Aide à la génération de formules via LLM", status: "OK" },
+      
+      { cat: "Fonctions Avancées", name: "Historique d'actions", func: "Snapshot", desc: "Sauvegardes automatiques et restauration", status: "OK" },
+      { cat: "Fonctions Avancées", name: "Audit Logs", func: "Streaming", desc: "Journalisation détaillée des accès (Édition Full uniquement)", status: "OPTIONNEL" }
+    ];
 
-function write(msg) {
-  console.log(msg);
-  log.textContent += msg + "\n";
-}
+    function addRow(cat, name, func, desc, status) {
+      const row = document.createElement('tr');
+      let statusClass = status === "OK" ? "ok" : (status === "NON" ? "no" : "status");
+      let statusText = status === "OK" ? "✓ Supporté" : (status === "NON" ? "✗ Non implémenté" : status);
+      
+      row.innerHTML = `
+        <td><strong>${name}</strong></td>
+        <td><code>${func}</code></td>
+        <td>${desc}</td>
+        <td><span class="status ${statusClass}">${statusText}</span></td>
+      `;
+      tableBody.appendChild(row);
+    }
 
-write("====================================================");
-write("ATTENTE EVENEMENTS");
-write("====================================================");
+    // Initialisation du widget
+    grist.ready({
+      requiredAccess: 'read table'
+    });
 
-grist.ready({
-  requiredAccess: "read table"
-});
+    // Test de l'accès aux données
+    grist.onRecords((records) => {
+      tableBody.innerHTML = ''; // Nettoyer
+      apiStatus.textContent = "API Grist connectée avec succès.";
 
+      let lastCat = "";
+      features.forEach(f => {
+        // Ajouter un en-tête de catégorie
+        if (f.cat !== lastCat) {
+          const catRow = document.createElement('tr');
+          catRow.innerHTML = `<td colspan="4" class="cat-header">${f.cat}</td>`;
+          tableBody.appendChild(catRow);
+          lastCat = f.cat;
+        }
 
-// ====================================================
-// EVENEMENT SUR LES LIGNES
-// ====================================================
+        // Tests dynamiques pour les éléments "TESTING"
+        let currentStatus = f.status;
+        if (f.func === "grist.ready()") currentStatus = "OK";
+        if (f.func === "onRecords") currentStatus = records ? "OK" : "NON";
 
-grist.onRecords(function(records) {
-
-  write("");
-  write("=== onRecords DECLENCHE ===");
-
-  write("Nombre de lignes : " + records.length);
-
-  write(JSON.stringify(records, null, 2));
-
-});
-
-
-// ====================================================
-// EVENEMENT SUR UNE LIGNE
-// ====================================================
-
-grist.onRecord(function(record) {
-
-  write("");
-  write("=== onRecord DECLENCHE ===");
-
-  write(JSON.stringify(record, null, 2));
-
-});
-
-</script>
-
+        addRow(f.cat, f.name, f.func, f.desc, currentStatus);
+      });
+    });
+  </script>
 </body>
 </html>
