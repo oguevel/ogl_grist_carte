@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Carte IGN - Widget Grist</title>
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: sans-serif; font-size: 13px; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body { font-family: sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
+  /* ── Config panel ── */
   #config-panel {
     background: #fff; border: 1px solid #ddd; border-radius: 8px;
     padding: 20px; margin: 20px auto; max-width: 540px; width: 92%;
@@ -27,8 +28,14 @@
   #btn-save:hover { background: #1d4ed8; }
   #error-msg { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px; padding: 10px 12px; color: #b91c1c; font-size: 12px; margin-bottom: 10px; display: none; }
 
+  /* ── App ── */
   #app { display: none; flex-direction: column; height: 100vh; }
-  #toolbar { background: #fff; border-bottom: 1px solid #ddd; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 42px; }
+
+  #toolbar {
+    background: #fff; border-bottom: 1px solid #ddd;
+    padding: 6px 10px; display: flex; flex-wrap: wrap;
+    gap: 6px; align-items: center; min-height: 42px; z-index: 10;
+  }
   .filter-group { display: flex; align-items: center; gap: 5px; }
   .filter-group label { font-size: 11px; color: #555; white-space: nowrap; font-weight: 600; }
   .filter-group select { padding: 4px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; background: #fff; min-width: 110px; max-width: 180px; }
@@ -36,21 +43,50 @@
   #btn-reset-filters:hover { background: #f0f0f0; }
   #count-badge { margin-left: auto; font-size: 12px; color: #1e40af; background: #eff6ff; border-radius: 12px; padding: 3px 10px; white-space: nowrap; }
   #btn-config-small { background: none; border: 1px solid #bbb; border-radius: 5px; padding: 4px 8px; font-size: 12px; cursor: pointer; color: #555; }
-  #map { flex: 1; }
 
-  #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(255,255,255,0.96); padding: 16px 24px; border-radius: 8px; border: 1px solid #ddd; font-size: 13px; color: #333; z-index: 9999; display: none; box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
-  #waiting { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 13px; color: #666; text-align: center; pointer-events: none; }
+  #map-container { flex: 1; position: relative; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+
+  #loading {
+    position: absolute; top: 10px; right: 10px;
+    background: white; padding: 8px 14px; border-radius: 6px;
+    font-size: 12px; color: #333; z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: none;
+  }
+
+  /* ── Marqueurs ── */
+  .marker-container { position: relative; width: 30px; height: 30px; }
+  .custom-marker {
+    width: 30px; height: 30px;
+    border-radius: 50% 50% 50% 0;
+    background: #2563eb;
+    transform: rotate(-45deg);
+    position: absolute; cursor: pointer;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+    transition: transform 0.15s;
+  }
+  .custom-marker.selected { background: #e63946; }
+  .custom-marker::after {
+    content: ''; width: 14px; height: 14px;
+    margin: 8px 0 0 8px; background: white;
+    position: absolute; border-radius: 50%;
+  }
+  .custom-marker:hover { transform: rotate(-45deg) scale(1.1); }
+  .marker-label {
+    position: absolute; left: 36px; top: 2px;
+    background: white; padding: 4px 8px; border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25); white-space: nowrap;
+    font-family: sans-serif; font-size: 12px; font-weight: 600;
+    color: #333; pointer-events: none;
+  }
 </style>
 </head>
 <body>
 
-<div id="loading">⏳ Chargement de la carte...</div>
-
 <div id="config-panel">
   <h2>⚙️ Configuration — Carte IGN</h2>
   <div class="info-box">
-    Les données proviennent directement de la vue Grist à laquelle ce widget est lié (via "Select by"). Aucune clé API ni URL externe nécessaire.<br>
-    Renseignez les noms de colonnes tels qu'ils apparaissent dans votre table.
+    Les données proviennent directement de la vue Grist liée (via "Select by"). Renseignez les noms de colonnes tels qu'ils apparaissent dans votre table.
   </div>
   <div id="error-msg"></div>
 
@@ -65,6 +101,16 @@
     </div>
   </div>
   <div class="form-group">
+    <label>Colonne label du marqueur</label>
+    <input type="text" id="cfg-label" placeholder="Libelle_public"/>
+    <small>Texte affiché à côté de chaque épingle sur la carte.</small>
+  </div>
+  <div class="form-group">
+    <label>Colonne code département</label>
+    <input type="text" id="cfg-dept" placeholder="Code_departement"/>
+    <small>Optionnel. Permet d'afficher le contour du département de la ligne sélectionnée.</small>
+  </div>
+  <div class="form-group">
     <label>Colonnes affichées en popup</label>
     <input type="text" id="cfg-popup" placeholder="Libelle_public, Commune, Type"/>
     <small>Séparées par des virgules. Laisser vide = toutes les colonnes.</small>
@@ -72,7 +118,7 @@
   <div class="form-group">
     <label>Colonnes de filtre (dropdowns)</label>
     <input type="text" id="cfg-filters" placeholder="Type, Region, Departement"/>
-    <small>Séparées par des virgules. Des menus déroulants seront générés automatiquement.</small>
+    <small>Séparées par des virgules.</small>
   </div>
   <button id="btn-save" onclick="saveConfig()">✔ Enregistrer et afficher la carte</button>
 </div>
@@ -84,17 +130,22 @@
     <span id="count-badge">0 point(s)</span>
     <button id="btn-config-small" onclick="showConfig()">⚙️</button>
   </div>
-  <div id="map"><div id="waiting">En attente des données Grist…</div></div>
+  <div id="map-container">
+    <div id="map"></div>
+    <div id="loading">⏳ Chargement...</div>
+  </div>
 </div>
 
 <script>
 let config = {};
 let map = null;
+let mapLoaded = false;
 let allData = [];
-let markerLayer = null;
+let markersMap = {};
 let currentRowId = null;
-let mapReady = false;
-let pendingData = null;
+let currentDept = null;
+let pendingRecords = null;
+let pendingRecord = null;
 
 const PASTEL = [
   '#FFB3B3','#FFD9B3','#FEFFB3','#C5FFB3','#B3FFEE','#B3D9FF','#D9B3FF','#FFB3EE',
@@ -117,6 +168,8 @@ function showError(msg) {
 function saveConfig() {
   const lat     = document.getElementById('cfg-lat').value.trim();
   const lon     = document.getElementById('cfg-lon').value.trim();
+  const label   = document.getElementById('cfg-label').value.trim();
+  const dept    = document.getElementById('cfg-dept').value.trim();
   const popup   = document.getElementById('cfg-popup').value.trim();
   const filters = document.getElementById('cfg-filters').value.trim();
 
@@ -127,12 +180,12 @@ function saveConfig() {
   showError('');
 
   config = {
-    lat, lon,
+    lat, lon, label, dept,
     popupCols:  popup   ? popup.split(',').map(s => s.trim()).filter(Boolean)   : [],
     filterCols: filters ? filters.split(',').map(s => s.trim()).filter(Boolean) : []
   };
 
-  try { grist.setOptions(config); } catch(e) { console.warn('setOptions:', e); }
+  try { grist.setOptions(config); } catch(e) {}
   showApp();
 }
 
@@ -144,56 +197,169 @@ function showConfig() {
 function showApp() {
   document.getElementById('config-panel').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  if (!mapReady) initMap();
+  if (!map) initMap();
 }
 
 function initMap() {
-  map = L.map('map', { zoomControl: true }).setView([46.5, 2.5], 6);
-  L.tileLayer(
-    'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
-    '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png' +
-    '&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-    { attribution: '© IGN Géoportail', maxZoom: 18 }
-  ).addTo(map);
-  markerLayer = L.layerGroup().addTo(map);
-  mapReady = true;
+  map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://data.geopf.fr/annexes/ressources/vectorTiles/styles/PLAN.IGN/standard.json',
+    center: [2.3522, 46.8566],
+    zoom: 5,
+    attributionControl: true
+  });
 
-  loadGeoLayers();
+  map.addControl(new maplibregl.NavigationControl());
 
-  if (pendingData) {
-    processRecords(pendingData);
-    pendingData = null;
-  }
+  map.on('load', () => {
+    mapLoaded = true;
+
+    map.addSource('dept-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addSource('region-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+    map.addLayer({ id: 'dept-fill', type: 'fill', source: 'dept-source',
+      paint: { 'fill-color': ['get', 'fillColor'], 'fill-opacity': 0.35 } });
+    map.addLayer({ id: 'dept-line', type: 'line', source: 'dept-source',
+      paint: { 'line-color': '#777', 'line-width': 1 } });
+    map.addLayer({ id: 'dept-selected-fill', type: 'fill', source: 'region-source',
+      paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.08 } });
+    map.addLayer({ id: 'dept-selected-line', type: 'line', source: 'region-source',
+      paint: { 'line-color': '#2563eb', 'line-width': 3, 'line-opacity': 0.85 } });
+
+    loadAllDepts();
+
+    if (pendingRecords) { processRecords(pendingRecords); pendingRecords = null; }
+    if (pendingRecord)  { handleRecord(pendingRecord);   pendingRecord  = null; }
+  });
 }
 
-async function loadGeoLayers() {
+async function loadAllDepts() {
+  showLoading(true);
   try {
-    const r = await fetch('https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:region&OUTPUTFORMAT=application/json&COUNT=50');
-    L.geoJSON(await r.json(), {
-      style: { color: '#333', weight: 2.5, fillOpacity: 0, dashArray: '6,4' }
-    }).addTo(map);
-  } catch(e) { console.warn('Régions IGN:', e); }
-
-  try {
-    const r = await fetch('https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:departement&OUTPUTFORMAT=application/json&COUNT=200');
-    L.geoJSON(await r.json(), {
-      style: f => {
-        const code = f.properties.insee_dep || f.properties.code_insee || f.properties.id || '';
-        return { color: '#777', weight: 1, fillColor: deptColor(code), fillOpacity: 0.38 };
-      },
-      onEachFeature: (f, layer) => {
-        const nom  = f.properties.nom_m || f.properties.nom || '';
-        const code = f.properties.insee_dep || f.properties.code_insee || '';
-        if (nom) layer.bindTooltip(`${nom} (${code})`, { sticky: true, opacity: 0.85 });
-      }
-    }).addTo(map);
+    const r = await fetch('https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature' +
+      '&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:departement&OUTPUTFORMAT=application/json&COUNT=200');
+    const geojson = await r.json();
+    geojson.features.forEach(f => {
+      const code = f.properties.insee_dep || f.properties.code_insee || '';
+      f.properties.fillColor = deptColor(code);
+    });
+    map.getSource('dept-source').setData(geojson);
   } catch(e) { console.warn('Départements IGN:', e); }
+  showLoading(false);
+}
+
+async function loadDeptContour(deptCode) {
+  if (!deptCode || currentDept === deptCode) return;
+  currentDept = deptCode;
+  try {
+    const r = await fetch(`https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
+      `&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:departement&OUTPUTFORMAT=application/json` +
+      `&CQL_FILTER=code_insee='${deptCode}'`);
+    const geojson = await r.json();
+    map.getSource('region-source').setData(geojson);
+
+    const bounds = calcBounds(geojson.features);
+    if (bounds) map.fitBounds(bounds, { padding: 60, duration: 1500, maxZoom: 10 });
+  } catch(e) { console.warn('Contour dept:', e); }
+}
+
+function calcBounds(features) {
+  let coords = [];
+  features.forEach(f => {
+    const g = f.geometry;
+    if (g.type === 'Polygon') coords = coords.concat(g.coordinates[0]);
+    else if (g.type === 'MultiPolygon') g.coordinates.forEach(p => coords = coords.concat(p[0]));
+  });
+  if (!coords.length) return null;
+  const lngs = coords.map(c => c[0]), lats = coords.map(c => c[1]);
+  return [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]];
+}
+
+function normalizeDeptCode(dept) {
+  if (!dept) return null;
+  let code = String(dept).trim().toUpperCase().replace(/\s/g, '');
+  if (/^\d$/.test(code)) code = '0' + code;
+  if (/^\d{5}$/.test(code)) { const p = code.substring(0,2); code = (p==='97') ? code.substring(0,3) : p; }
+  if (code === '20') code = '2A';
+  return code;
+}
+
+function clearMarkers() {
+  Object.values(markersMap).forEach(m => m.remove());
+  markersMap = {};
+}
+
+function makeMarkerEl(label, selected) {
+  const container = document.createElement('div');
+  container.className = 'marker-container';
+  const pin = document.createElement('div');
+  pin.className = 'custom-marker' + (selected ? ' selected' : '');
+  container.appendChild(pin);
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'marker-label';
+    lbl.textContent = label;
+    container.appendChild(lbl);
+  }
+  return container;
+}
+
+function buildPopupHtml(row) {
+  const cols = config.popupCols && config.popupCols.length > 0
+    ? config.popupCols
+    : Object.keys(row).filter(k => !['id','geom','coordonnees_geo'].includes(k));
+  let html = '<div style="font-size:13px;max-width:280px;max-height:200px;overflow-y:auto;">';
+  cols.forEach(col => {
+    const val = row[col];
+    if (val !== undefined && val !== null && val !== '') {
+      html += `<div style="margin-bottom:5px;">
+        <span style="color:#666;font-size:11px;display:block;">${col.replace(/_/g,' ')}</span>
+        <span style="font-weight:500;">${val}</span>
+      </div>`;
+    }
+  });
+  return html + '</div>';
+}
+
+function renderMarkers(data) {
+  if (!mapLoaded) return;
+  clearMarkers();
+  let count = 0;
+  data.forEach(row => {
+    const lat = parseFloat(String(row[config.lat] || '').trim());
+    const lon = parseFloat(String(row[config.lon] || '').trim());
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    const selected = currentRowId !== null && row.id === currentRowId;
+    const labelText = config.label ? String(row[config.label] || '') : '';
+    const el = makeMarkerEl(labelText, selected);
+
+    const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+      .setLngLat([lon, lat])
+      .addTo(map);
+
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      currentRowId = row.id;
+      try { grist.setCursorPos({ rowId: row.id }); } catch(err) {}
+
+      new maplibregl.Popup({ offset: 35, closeButton: true, closeOnClick: false })
+        .setLngLat([lon, lat])
+        .setHTML(buildPopupHtml(row))
+        .addTo(map);
+
+      map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 12), duration: 1000 });
+      renderMarkers(getFiltered());
+    });
+
+    markersMap[row.id] = marker;
+    count++;
+  });
+  document.getElementById('count-badge').textContent = `${count} point(s)`;
 }
 
 function processRecords(records) {
   allData = records;
-  const el = document.getElementById('waiting');
-  if (el) el.style.display = 'none';
   buildFilters();
   renderMarkers(allData);
 }
@@ -204,20 +370,17 @@ function buildFilters() {
   (config.filterCols || []).forEach(col => {
     const values = [...new Set(
       allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '')
-    )].sort((a, b) => String(a).localeCompare(String(b), 'fr'));
+    )].sort((a,b) => String(a).localeCompare(String(b), 'fr'));
 
     const group = document.createElement('div');
     group.className = 'filter-group';
-
     const label = document.createElement('label');
-    label.textContent = col.replace(/_/g, ' ') + ' :';
-
+    label.textContent = col.replace(/_/g,' ') + ' :';
     const select = document.createElement('select');
     select.id = 'filter-' + col;
     select.innerHTML = `<option value="">— Tous —</option>` +
       values.map(v => `<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');
     select.addEventListener('change', applyFilters);
-
     group.appendChild(label);
     group.appendChild(select);
     container.appendChild(group);
@@ -243,58 +406,15 @@ function resetFilters() {
   renderMarkers(allData);
 }
 
-function makeIcon(selected) {
-  const s = selected ? 18 : 11;
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:${s}px;height:${s}px;background:${selected?'#e63946':'#2563eb'};border:2px solid ${selected?'#9b1a24':'#1e3a8a'};border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.28);"></div>`,
-    iconSize: [s, s], iconAnchor: [s/2, s/2]
-  });
-}
+function handleRecord(record) {
+  if (!record) return;
+  currentRowId = record.id;
+  renderMarkers(getFiltered());
 
-function renderMarkers(data) {
-  if (!mapReady) return;
-  markerLayer.clearLayers();
-  let count = 0;
-
-  data.forEach(row => {
-    const lat = parseFloat(String(row[config.lat]).trim());
-    const lon = parseFloat(String(row[config.lon]).trim());
-    if (isNaN(lat) || isNaN(lon)) return;
-
-    const selected = currentRowId !== null && row.id === currentRowId;
-    const marker = L.marker([lat, lon], { icon: makeIcon(selected) });
-
-    const cols = config.popupCols && config.popupCols.length > 0
-      ? config.popupCols
-      : Object.keys(row).filter(k => !['id','geom','coordonnees_geo'].includes(k));
-
-    let html = '<div style="font-size:13px;min-width:180px;max-width:280px;max-height:220px;overflow-y:auto;">';
-    cols.forEach(col => {
-      const val = row[col];
-      if (val !== undefined && val !== null && val !== '') {
-        html += `<div style="margin-bottom:5px;"><span style="color:#666;font-size:11px;display:block;">${col.replace(/_/g,' ')}</span><span style="font-weight:500;">${val}</span></div>`;
-      }
-    });
-    html += '</div>';
-
-    marker.bindPopup(html, { maxWidth: 290 });
-    marker.on('click', () => {
-      currentRowId = row.id;
-      try { grist.setCursorPos({ rowId: row.id }); } catch(e) {}
-      renderMarkers(getFiltered());
-      setTimeout(() => marker.openPopup(), 50);
-    });
-
-    marker.addTo(markerLayer);
-    if (selected) {
-      map.panTo([lat, lon]);
-      setTimeout(() => marker.openPopup(), 100);
-    }
-    count++;
-  });
-
-  document.getElementById('count-badge').textContent = `${count} point(s)`;
+  if (config.dept && record[config.dept]) {
+    const code = normalizeDeptCode(record[config.dept]);
+    if (code) loadDeptContour(code);
+  }
 }
 
 grist.ready({ requiredAccess: 'read table' });
@@ -302,8 +422,10 @@ grist.ready({ requiredAccess: 'read table' });
 grist.onOptions(opts => {
   if (!opts || !opts.lat) return;
   config = opts;
-  document.getElementById('cfg-lat').value     = opts.lat || '';
-  document.getElementById('cfg-lon').value     = opts.lon || '';
+  document.getElementById('cfg-lat').value     = opts.lat   || '';
+  document.getElementById('cfg-lon').value     = opts.lon   || '';
+  document.getElementById('cfg-label').value   = opts.label || '';
+  document.getElementById('cfg-dept').value    = opts.dept  || '';
   document.getElementById('cfg-popup').value   = (opts.popupCols  || []).join(', ');
   document.getElementById('cfg-filters').value = (opts.filterCols || []).join(', ');
   showApp();
@@ -311,18 +433,13 @@ grist.onOptions(opts => {
 
 grist.onRecords(records => {
   if (!config.lat) return;
-  showLoading(false);
-  if (!mapReady) {
-    pendingData = records;
-    return;
-  }
+  if (!mapLoaded) { pendingRecords = records; return; }
   processRecords(records);
 });
 
 grist.onRecord(record => {
-  if (!record || !mapReady) return;
-  currentRowId = record.id;
-  renderMarkers(getFiltered());
+  if (!mapLoaded) { pendingRecord = record; return; }
+  handleRecord(record);
 });
 </script>
 </body>
