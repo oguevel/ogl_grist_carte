@@ -9,52 +9,41 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: sans-serif; font-size: 13px; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
+  body { font-family: sans-serif; font-size: 13px; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
   #config-panel {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 20px;
-    margin: 20px auto;
-    max-width: 600px;
-    width: 90%;
+    background: #fff; border: 1px solid #ddd; border-radius: 8px;
+    padding: 20px; margin: 20px auto; max-width: 560px; width: 90%;
+    overflow-y: auto; max-height: 95vh;
   }
-  #config-panel h2 { font-size: 16px; margin-bottom: 16px; color: #333; }
-  .form-group { margin-bottom: 12px; }
-  .form-group label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: 500; }
-  .form-group input, .form-group select {
+  #config-panel h2 { font-size: 15px; margin-bottom: 14px; color: #333; }
+  .form-group { margin-bottom: 11px; }
+  .form-group label { display: block; font-size: 11px; color: #555; margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .form-group input {
     width: 100%; padding: 7px 10px; border: 1px solid #ccc;
     border-radius: 5px; font-size: 13px; background: #fff;
   }
   .form-group small { color: #888; font-size: 11px; margin-top: 3px; display: block; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #1e40af; margin-bottom: 14px; }
   #btn-save {
     background: #2563eb; color: white; border: none; border-radius: 6px;
     padding: 9px 22px; font-size: 13px; cursor: pointer; margin-top: 8px;
   }
   #btn-save:hover { background: #1d4ed8; }
-  #btn-reset {
-    background: none; border: 1px solid #ccc; border-radius: 6px;
-    padding: 9px 16px; font-size: 12px; cursor: pointer; margin-top: 8px; margin-left: 8px; color: #555;
-  }
 
   #app { display: none; flex-direction: column; height: 100vh; }
 
   #toolbar {
-    background: #fff;
-    border-bottom: 1px solid #ddd;
-    padding: 8px 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
+    background: #fff; border-bottom: 1px solid #ddd;
+    padding: 6px 10px; display: flex; flex-wrap: wrap;
+    gap: 6px; align-items: center; min-height: 42px;
   }
-  #toolbar .filter-group { display: flex; align-items: center; gap: 6px; }
-  #toolbar label { font-size: 12px; color: #555; white-space: nowrap; }
-  #toolbar select {
+  .filter-group { display: flex; align-items: center; gap: 5px; }
+  .filter-group label { font-size: 11px; color: #555; white-space: nowrap; font-weight: 600; }
+  .filter-group select {
     padding: 4px 8px; border: 1px solid #ccc; border-radius: 5px;
-    font-size: 12px; background: #fff; min-width: 120px; max-width: 200px;
+    font-size: 12px; background: #fff; min-width: 110px; max-width: 190px;
   }
   #btn-reset-filters {
     background: none; border: 1px solid #bbb; border-radius: 5px;
@@ -62,9 +51,8 @@
   }
   #btn-reset-filters:hover { background: #f0f0f0; }
   #count-badge {
-    margin-left: auto; font-size: 12px; color: #666;
-    background: #e8f4fd; border-radius: 12px; padding: 3px 10px;
-    white-space: nowrap;
+    margin-left: auto; font-size: 12px; color: #1e40af;
+    background: #eff6ff; border-radius: 12px; padding: 3px 10px; white-space: nowrap;
   }
   #btn-config-small {
     background: none; border: 1px solid #bbb; border-radius: 5px;
@@ -74,42 +62,32 @@
   #map { flex: 1; }
 
   #loading {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    background: rgba(255,255,255,0.92); padding: 18px 28px; border-radius: 8px;
-    border: 1px solid #ddd; font-size: 14px; color: #333; z-index: 9999;
-    display: none;
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: rgba(255,255,255,0.95); padding: 16px 24px; border-radius: 8px;
+    border: 1px solid #ddd; font-size: 13px; color: #333; z-index: 9999;
+    display: none; box-shadow: 0 2px 12px rgba(0,0,0,0.12);
   }
   #error-msg {
     background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;
-    padding: 10px 14px; color: #b91c1c; font-size: 12px; margin-top: 10px;
-    display: none;
+    padding: 10px 12px; color: #b91c1c; font-size: 12px; margin-bottom: 10px; display: none;
   }
 </style>
 </head>
 <body>
 
-<div id="loading">Chargement des données...</div>
+<div id="loading">⏳ Chargement...</div>
 
 <div id="config-panel">
-  <h2>⚙️ Configuration du widget carte</h2>
+  <h2>⚙️ Configuration du widget carte IGN</h2>
+  <div class="info-box">
+    Les données sont lues directement depuis Grist via l'API interne du widget — aucune clé API ni URL externe nécessaire.
+  </div>
   <div id="error-msg"></div>
 
   <div class="form-group">
-    <label>URL de l'instance Grist</label>
-    <input type="text" id="cfg-url" placeholder="https://grist.numerique.gouv.fr"/>
-  </div>
-  <div class="form-group">
-    <label>Doc ID</label>
-    <input type="text" id="cfg-docid" placeholder="Ex: 5XVuprVu9RNDGaDRGwJKic"/>
-  </div>
-  <div class="form-group">
-    <label>Clé API Grist</label>
-    <input type="password" id="cfg-apikey" placeholder="••••••••"/>
-    <small>Stockée uniquement dans les options du widget Grist, jamais envoyée ailleurs.</small>
-  </div>
-  <div class="form-group">
-    <label>Nom exact de la table</label>
+    <label>Nom exact de la table Grist</label>
     <input type="text" id="cfg-table" placeholder="Ex: Table_mere"/>
+    <small>Visible dans "Données brutes" → nom de la table (sensible à la casse).</small>
   </div>
   <div class="form-row">
     <div class="form-group">
@@ -122,26 +100,26 @@
     </div>
   </div>
   <div class="form-group">
-    <label>Colonnes à afficher en popup</label>
-    <input type="text" id="cfg-popup" placeholder="nom, adresse, type (séparées par des virgules)"/>
+    <label>Colonnes affichées en popup</label>
+    <input type="text" id="cfg-popup" placeholder="nom, adresse, type"/>
+    <small>Séparées par des virgules. Laisser vide = toutes les colonnes.</small>
   </div>
   <div class="form-group">
-    <label>Colonnes de filtre</label>
-    <input type="text" id="cfg-filters" placeholder="type, commune (séparées par des virgules)"/>
-    <small>Des menus déroulants seront générés automatiquement pour chaque colonne.</small>
+    <label>Colonnes de filtre (dropdowns)</label>
+    <input type="text" id="cfg-filters" placeholder="type, commune"/>
+    <small>Séparées par des virgules. Des menus déroulants seront générés automatiquement.</small>
   </div>
   <div>
-    <button id="btn-save" onclick="saveConfig()">Enregistrer et charger la carte</button>
-    <button id="btn-reset" onclick="resetConfig()" style="display:none">Réinitialiser</button>
+    <button id="btn-save" onclick="saveConfig()">✔ Enregistrer et afficher la carte</button>
   </div>
 </div>
 
 <div id="app">
   <div id="toolbar">
-    <div id="filters-container"></div>
-    <button id="btn-reset-filters" onclick="resetFilters()">Réinitialiser les filtres</button>
+    <div id="filters-container" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"></div>
+    <button id="btn-reset-filters" onclick="resetFilters()">✕ Réinitialiser</button>
     <span id="count-badge">0 point(s)</span>
-    <button id="btn-config-small" onclick="showConfig()">⚙️ Config</button>
+    <button id="btn-config-small" onclick="showConfig()">⚙️</button>
   </div>
   <div id="map"></div>
 </div>
@@ -150,16 +128,13 @@
 let config = {};
 let map = null;
 let allData = [];
-let markers = [];
 let markerLayer = null;
-let deptLayer = null;
-let regionLayer = null;
 let currentRowId = null;
 
 const PASTEL_COLORS = [
-  '#FFB3B3','#FFD9B3','#FFFBB3','#B3FFB3','#B3FFFF','#B3D9FF','#D9B3FF','#FFB3FF',
-  '#FFB3CC','#B3FFD9','#CCB3FF','#FFCCB3','#B3CCFF','#FFB3E6','#B3FFB3','#E6FFB3',
-  '#B3F0FF','#FFB3A0','#A0FFB3','#F0B3FF','#FFE6B3','#B3FFE6','#FFB3D9','#D9FFB3'
+  '#FFB3B3','#FFD9B3','#FFFBB3','#C8FFB3','#B3FFEE','#B3D9FF','#D9B3FF','#FFB3EE',
+  '#FFB3CC','#B3FFD9','#CCB3FF','#FFCCB3','#B3CCFF','#FFB3E0','#E0FFB3','#B3F0FF',
+  '#FFB3A0','#A8FFB3','#F0B3FF','#FFE6B3','#B3FFE6','#FFB3D5','#D5FFB3','#B3EBFF'
 ];
 
 function deptColor(code) {
@@ -168,9 +143,7 @@ function deptColor(code) {
   return PASTEL_COLORS[hash % PASTEL_COLORS.length];
 }
 
-function showLoading(v) {
-  document.getElementById('loading').style.display = v ? 'block' : 'none';
-}
+function showLoading(v) { document.getElementById('loading').style.display = v ? 'block' : 'none'; }
 
 function showError(msg) {
   const el = document.getElementById('error-msg');
@@ -179,133 +152,105 @@ function showError(msg) {
 }
 
 function saveConfig() {
-  const url   = document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
-  const docid = document.getElementById('cfg-docid').value.trim();
-  const key   = document.getElementById('cfg-apikey').value.trim();
-  const table = document.getElementById('cfg-table').value.trim();
-  const lat   = document.getElementById('cfg-lat').value.trim();
-  const lon   = document.getElementById('cfg-lon').value.trim();
-  const popup = document.getElementById('cfg-popup').value.trim();
+  const table   = document.getElementById('cfg-table').value.trim();
+  const lat     = document.getElementById('cfg-lat').value.trim();
+  const lon     = document.getElementById('cfg-lon').value.trim();
+  const popup   = document.getElementById('cfg-popup').value.trim();
   const filters = document.getElementById('cfg-filters').value.trim();
 
-  if (!url || !docid || !key || !table || !lat || !lon) {
-    showError('Veuillez remplir tous les champs obligatoires (URL, Doc ID, Clé API, Table, Latitude, Longitude).');
+  if (!table || !lat || !lon) {
+    showError('Veuillez renseigner le nom de la table, la colonne latitude et la colonne longitude.');
     return;
   }
   showError('');
 
   config = {
-    url, docid, key, table, lat, lon,
-    popupCols: popup ? popup.split(',').map(s => s.trim()).filter(Boolean) : [],
+    table, lat, lon,
+    popupCols:  popup   ? popup.split(',').map(s => s.trim()).filter(Boolean)   : [],
     filterCols: filters ? filters.split(',').map(s => s.trim()).filter(Boolean) : []
   };
 
-  try {
-    grist.setOptions(config);
-  } catch(e) {}
-
+  try { grist.setOptions(config); } catch(e) { console.warn('setOptions:', e); }
   startApp();
 }
 
-function resetConfig() {
+function showConfig() {
   document.getElementById('app').style.display = 'none';
   document.getElementById('config-panel').style.display = 'block';
-  document.getElementById('btn-reset').style.display = 'none';
 }
-
-function showConfig() { resetConfig(); }
 
 async function startApp() {
   document.getElementById('config-panel').style.display = 'none';
-  document.getElementById('btn-reset').style.display = 'inline-block';
   document.getElementById('app').style.display = 'flex';
 
   if (!map) initMap();
+  showLoading(true);
   await loadGeoLayers();
   await loadData();
+  showLoading(false);
 }
 
 function initMap() {
   map = L.map('map', { zoomControl: true }).setView([46.5, 2.5], 6);
-
   L.tileLayer(
     'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
     '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png' +
     '&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
     { attribution: '© IGN Géoportail', maxZoom: 18 }
   ).addTo(map);
-
   markerLayer = L.layerGroup().addTo(map);
 }
 
 async function loadGeoLayers() {
   try {
-    await loadRegions();
-  } catch(e) { console.warn('Régions non chargées:', e); }
+    const r = await fetch('https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:region&OUTPUTFORMAT=application/json&COUNT=50');
+    const geojson = await r.json();
+    L.geoJSON(geojson, {
+      style: { color: '#444', weight: 2.5, fillOpacity: 0, dashArray: '6,4' }
+    }).addTo(map);
+  } catch(e) { console.warn('Régions:', e); }
+
   try {
-    await loadDepts();
-  } catch(e) { console.warn('Départements non chargés:', e); }
-}
-
-async function loadRegions() {
-  const url = 'https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature' +
-    '&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:region&OUTPUTFORMAT=application/json&COUNT=50';
-  const resp = await fetch(url);
-  const geojson = await resp.json();
-  if (regionLayer) map.removeLayer(regionLayer);
-  regionLayer = L.geoJSON(geojson, {
-    style: { color: '#555', weight: 2, fillOpacity: 0, dashArray: '5,4' }
-  }).addTo(map);
-}
-
-async function loadDepts() {
-  const url = 'https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature' +
-    '&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:departement&OUTPUTFORMAT=application/json&COUNT=200';
-  const resp = await fetch(url);
-  const geojson = await resp.json();
-  if (deptLayer) map.removeLayer(deptLayer);
-  deptLayer = L.geoJSON(geojson, {
-    style: feature => {
-      const code = feature.properties.insee_dep || feature.properties.code_insee || feature.properties.id || '';
-      return {
-        color: '#777',
-        weight: 1,
-        fillColor: deptColor(code),
-        fillOpacity: 0.35
-      };
-    },
-    onEachFeature: (feature, layer) => {
-      const nom = feature.properties.nom_m || feature.properties.nom || '';
-      const code = feature.properties.insee_dep || feature.properties.code_insee || '';
-      if (nom) layer.bindTooltip(`${nom} (${code})`, { sticky: true, opacity: 0.85 });
-    }
-  }).addTo(map);
+    const r = await fetch('https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:departement&OUTPUTFORMAT=application/json&COUNT=200');
+    const geojson = await r.json();
+    L.geoJSON(geojson, {
+      style: feature => {
+        const code = feature.properties.insee_dep || feature.properties.code_insee || feature.properties.id || '';
+        return { color: '#888', weight: 1, fillColor: deptColor(code), fillOpacity: 0.35 };
+      },
+      onEachFeature: (feature, layer) => {
+        const nom  = feature.properties.nom_m || feature.properties.nom || '';
+        const code = feature.properties.insee_dep || feature.properties.code_insee || '';
+        if (nom) layer.bindTooltip(`${nom} (${code})`, { sticky: true, opacity: 0.85 });
+      }
+    }).addTo(map);
+  } catch(e) { console.warn('Départements:', e); }
 }
 
 async function loadData() {
-  showLoading(true);
   try {
-    const url = `${config.url}/api/docs/${config.docid}/tables/${config.table}/records`;
-    const resp = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${config.key}` }
+    const tableData = await grist.docApi.fetchTable(config.table);
+    const ids = tableData.id || [];
+    allData = ids.map((id, i) => {
+      const row = { id };
+      for (const col of Object.keys(tableData)) {
+        if (col !== 'id') row[col] = tableData[col][i];
+      }
+      return row;
     });
-    if (!resp.ok) throw new Error(`Erreur API Grist : ${resp.status} ${resp.statusText}`);
-    const json = await resp.json();
-    allData = (json.records || []).map(r => ({ id: r.id, ...r.fields }));
     buildFilters();
     renderMarkers(allData);
   } catch(e) {
-    alert('Erreur lors du chargement des données : ' + e.message);
-  } finally {
     showLoading(false);
+    alert('Erreur lors du chargement de la table "' + config.table + '" : ' + e.message);
   }
 }
 
 function buildFilters() {
   const container = document.getElementById('filters-container');
   container.innerHTML = '';
-  config.filterCols.forEach(col => {
-    const values = [...new Set(allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== ''))].sort();
+  (config.filterCols || []).forEach(col => {
+    const values = [...new Set(allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== ''))].sort((a,b) => String(a).localeCompare(String(b)));
     const group = document.createElement('div');
     group.className = 'filter-group';
     const label = document.createElement('label');
@@ -321,122 +266,103 @@ function buildFilters() {
   });
 }
 
-function applyFilters() {
+function getFiltered() {
   let filtered = [...allData];
-  config.filterCols.forEach(col => {
+  (config.filterCols || []).forEach(col => {
     const sel = document.getElementById('filter-' + col);
-    if (sel && sel.value !== '') {
-      filtered = filtered.filter(r => String(r[col]) === sel.value);
-    }
+    if (sel && sel.value !== '') filtered = filtered.filter(r => String(r[col]) === sel.value);
   });
-  renderMarkers(filtered);
+  return filtered;
 }
 
+function applyFilters() { renderMarkers(getFiltered()); }
+
 function resetFilters() {
-  config.filterCols.forEach(col => {
+  (config.filterCols || []).forEach(col => {
     const sel = document.getElementById('filter-' + col);
     if (sel) sel.value = '';
   });
   renderMarkers(allData);
 }
 
+function makeIcon(selected) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${selected?18:11}px; height:${selected?18:11}px;
+      background:${selected?'#e63946':'#2563eb'};
+      border:2px solid ${selected?'#9b1a24':'#1e3a8a'};
+      border-radius:50%;
+      box-shadow:0 1px 4px rgba(0,0,0,0.28);
+      transition:all 0.15s;
+    "></div>`,
+    iconSize: [selected?18:11, selected?18:11],
+    iconAnchor: [selected?9:5.5, selected?9:5.5]
+  });
+}
+
 function renderMarkers(data) {
   markerLayer.clearLayers();
-  markers = [];
   let count = 0;
-
   data.forEach(row => {
     const lat = parseFloat(row[config.lat]);
     const lon = parseFloat(row[config.lon]);
     if (isNaN(lat) || isNaN(lon)) return;
 
-    const isSelected = currentRowId !== null && row.id === currentRowId;
+    const selected = currentRowId !== null && row.id === currentRowId;
+    const marker = L.marker([lat, lon], { icon: makeIcon(selected) });
 
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="
-        width:${isSelected ? 18 : 12}px;
-        height:${isSelected ? 18 : 12}px;
-        background:${isSelected ? '#e63946' : '#2563eb'};
-        border:2px solid ${isSelected ? '#9b1a24' : '#1e3a8a'};
-        border-radius:50%;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-      "></div>`,
-      iconSize: [isSelected ? 18 : 12, isSelected ? 18 : 12],
-      iconAnchor: [isSelected ? 9 : 6, isSelected ? 9 : 6]
-    });
+    const cols = config.popupCols && config.popupCols.length > 0
+      ? config.popupCols
+      : Object.keys(row).filter(k => k !== 'id' && k !== config.lat && k !== config.lon);
 
-    const marker = L.marker([lat, lon], { icon });
-
-    let popupHtml = '<div style="font-size:13px;min-width:160px;">';
-    const cols = config.popupCols.length > 0 ? config.popupCols : Object.keys(row).filter(k => k !== 'id');
+    let html = '<div style="font-size:13px;min-width:160px;max-width:260px;">';
     cols.forEach(col => {
-      if (row[col] !== undefined && row[col] !== null && row[col] !== '') {
-        popupHtml += `<div style="margin-bottom:4px;"><span style="color:#666;font-size:11px;">${col}</span><br><strong>${row[col]}</strong></div>`;
+      const val = row[col];
+      if (val !== undefined && val !== null && val !== '') {
+        html += `<div style="margin-bottom:5px;">
+          <span style="color:#666;font-size:11px;display:block;">${col}</span>
+          <span style="font-weight:500;">${val}</span>
+        </div>`;
       }
     });
-    popupHtml += '</div>';
+    html += '</div>';
 
-    marker.bindPopup(popupHtml);
+    marker.bindPopup(html, { maxWidth: 280 });
     marker.on('click', () => {
-      try { grist.setCursorPos({ rowId: row.id }); } catch(e) {}
       currentRowId = row.id;
+      try { grist.setCursorPos({ rowId: row.id }); } catch(e) {}
+      renderMarkers(getFiltered());
+      marker.openPopup();
     });
 
     marker.addTo(markerLayer);
-    markers.push({ marker, id: row.id });
+    if (selected) {
+      marker.openPopup();
+      map.panTo([lat, lon]);
+    }
     count++;
   });
-
   document.getElementById('count-badge').textContent = `${count} point(s)`;
-}
-
-function highlightMarker(rowId) {
-  currentRowId = rowId;
-  const filtered = getCurrentFiltered();
-  renderMarkers(filtered);
-  const entry = markers.find(m => m.id === rowId);
-  if (entry) {
-    map.panTo(entry.marker.getLatLng());
-    entry.marker.openPopup();
-  }
-}
-
-function getCurrentFiltered() {
-  let filtered = [...allData];
-  if (config.filterCols) {
-    config.filterCols.forEach(col => {
-      const sel = document.getElementById('filter-' + col);
-      if (sel && sel.value !== '') {
-        filtered = filtered.filter(r => String(r[col]) === sel.value);
-      }
-    });
-  }
-  return filtered;
 }
 
 grist.ready({ requiredAccess: 'read table' });
 
 grist.onRecord(record => {
   if (!record || !map) return;
-  highlightMarker(record.id);
+  currentRowId = record.id;
+  renderMarkers(getFiltered());
 });
 
 grist.onOptions(opts => {
-  if (!opts) return;
+  if (!opts || !opts.table) return;
   config = opts;
-  document.getElementById('cfg-url').value    = opts.url    || '';
-  document.getElementById('cfg-docid').value  = opts.docid  || '';
-  document.getElementById('cfg-apikey').value = opts.key    || '';
-  document.getElementById('cfg-table').value  = opts.table  || '';
-  document.getElementById('cfg-lat').value    = opts.lat    || '';
-  document.getElementById('cfg-lon').value    = opts.lon    || '';
-  document.getElementById('cfg-popup').value  = (opts.popupCols  || []).join(', ');
-  document.getElementById('cfg-filters').value= (opts.filterCols || []).join(', ');
-
-  if (opts.url && opts.docid && opts.key && opts.table && opts.lat && opts.lon) {
-    startApp();
-  }
+  document.getElementById('cfg-table').value   = opts.table || '';
+  document.getElementById('cfg-lat').value     = opts.lat   || '';
+  document.getElementById('cfg-lon').value     = opts.lon   || '';
+  document.getElementById('cfg-popup').value   = (opts.popupCols  || []).join(', ');
+  document.getElementById('cfg-filters').value = (opts.filterCols || []).join(', ');
+  if (opts.table && opts.lat && opts.lon) startApp();
 });
 </script>
 </body>
