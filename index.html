@@ -2,368 +2,101 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carte IGN - Widget Grist</title>
+<title>Diagnostic tables Grist</title>
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: sans-serif; font-size: 13px; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-  #config-panel {
-    background: #fff; border: 1px solid #ddd; border-radius: 8px;
-    padding: 20px; margin: 20px auto; max-width: 560px; width: 90%;
-    overflow-y: auto; max-height: 95vh;
-  }
-  #config-panel h2 { font-size: 15px; margin-bottom: 14px; color: #333; }
-  .form-group { margin-bottom: 11px; }
-  .form-group label { display: block; font-size: 11px; color: #555; margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
-  .form-group input {
-    width: 100%; padding: 7px 10px; border: 1px solid #ccc;
-    border-radius: 5px; font-size: 13px; background: #fff;
-  }
-  .form-group small { color: #888; font-size: 11px; margin-top: 3px; display: block; }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #1e40af; margin-bottom: 14px; }
-  #btn-save {
-    background: #2563eb; color: white; border: none; border-radius: 6px;
-    padding: 9px 22px; font-size: 13px; cursor: pointer; margin-top: 8px;
-  }
-  #btn-save:hover { background: #1d4ed8; }
-
-  #app { display: none; flex-direction: column; height: 100vh; }
-
-  #toolbar {
-    background: #fff; border-bottom: 1px solid #ddd;
-    padding: 6px 10px; display: flex; flex-wrap: wrap;
-    gap: 6px; align-items: center; min-height: 42px;
-  }
-  .filter-group { display: flex; align-items: center; gap: 5px; }
-  .filter-group label { font-size: 11px; color: #555; white-space: nowrap; font-weight: 600; }
-  .filter-group select {
-    padding: 4px 8px; border: 1px solid #ccc; border-radius: 5px;
-    font-size: 12px; background: #fff; min-width: 110px; max-width: 190px;
-  }
-  #btn-reset-filters {
-    background: none; border: 1px solid #bbb; border-radius: 5px;
-    padding: 4px 10px; font-size: 12px; cursor: pointer; color: #555; white-space: nowrap;
-  }
-  #btn-reset-filters:hover { background: #f0f0f0; }
-  #count-badge {
-    margin-left: auto; font-size: 12px; color: #1e40af;
-    background: #eff6ff; border-radius: 12px; padding: 3px 10px; white-space: nowrap;
-  }
-  #btn-config-small {
-    background: none; border: 1px solid #bbb; border-radius: 5px;
-    padding: 4px 8px; font-size: 12px; cursor: pointer; color: #555;
-  }
-
-  #map { flex: 1; }
-
-  #loading {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    background: rgba(255,255,255,0.95); padding: 16px 24px; border-radius: 8px;
-    border: 1px solid #ddd; font-size: 13px; color: #333; z-index: 9999;
-    display: none; box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-  }
-  #error-msg {
-    background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;
-    padding: 10px 12px; color: #b91c1c; font-size: 12px; margin-bottom: 10px; display: none;
-  }
+  body { font-family: monospace; font-size: 13px; padding: 14px; background: #f9f9f9; }
+  h3 { font-family: sans-serif; font-size: 15px; margin-bottom: 12px; }
+  .block { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+  .ok  { color: #15803d; }
+  .err { color: #b91c1c; }
+  .info { color: #1d4ed8; }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 4px 0 0; }
+  button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 5px; background: #fff; cursor: pointer; font-size: 12px; margin: 4px 4px 4px 0; }
+  button:hover { background: #f0f0f0; }
+  #log { max-height: 60vh; overflow-y: auto; }
 </style>
 </head>
 <body>
+<h3>Diagnostic — API interne Grist</h3>
 
-<div id="loading">⏳ Chargement...</div>
-
-<div id="config-panel">
-  <h2>⚙️ Configuration du widget carte IGN</h2>
-  <div class="info-box">
-    Les données sont lues directement depuis Grist via l'API interne du widget — aucune clé API ni URL externe nécessaire.
-  </div>
-  <div id="error-msg"></div>
-
-  <div class="form-group">
-    <label>Nom exact de la table Grist</label>
-    <input type="text" id="cfg-table" placeholder="Ex: Table_mere"/>
-    <small>Visible dans "Données brutes" → nom de la table (sensible à la casse).</small>
-  </div>
-  <div class="form-row">
-    <div class="form-group">
-      <label>Colonne latitude</label>
-      <input type="text" id="cfg-lat" placeholder="lat"/>
-    </div>
-    <div class="form-group">
-      <label>Colonne longitude</label>
-      <input type="text" id="cfg-lon" placeholder="lon"/>
-    </div>
-  </div>
-  <div class="form-group">
-    <label>Colonnes affichées en popup</label>
-    <input type="text" id="cfg-popup" placeholder="nom, adresse, type"/>
-    <small>Séparées par des virgules. Laisser vide = toutes les colonnes.</small>
-  </div>
-  <div class="form-group">
-    <label>Colonnes de filtre (dropdowns)</label>
-    <input type="text" id="cfg-filters" placeholder="type, commune"/>
-    <small>Séparées par des virgules. Des menus déroulants seront générés automatiquement.</small>
-  </div>
-  <div>
-    <button id="btn-save" onclick="saveConfig()">✔ Enregistrer et afficher la carte</button>
-  </div>
+<div class="block">
+  <strong>Test 1 — grist.docApi.fetchTable avec différents noms</strong><br>
+  <input type="text" id="table-input" placeholder="nom de table à tester" style="padding:5px;border:1px solid #ccc;border-radius:4px;width:220px;margin:6px 0;">
+  <button onclick="testFetchTable()">Tester fetchTable</button>
+  <button onclick="testFetchTableList()">Lister toutes les tables (listTables)</button>
+  <button onclick="testGetDocInfo()">getDocInfo</button>
+  <button onclick="testOnRecords()">Inspecter onRecords</button>
 </div>
 
-<div id="app">
-  <div id="toolbar">
-    <div id="filters-container" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"></div>
-    <button id="btn-reset-filters" onclick="resetFilters()">✕ Réinitialiser</button>
-    <span id="count-badge">0 point(s)</span>
-    <button id="btn-config-small" onclick="showConfig()">⚙️</button>
-  </div>
-  <div id="map"></div>
-</div>
+<div id="log"></div>
 
 <script>
-let config = {};
-let map = null;
-let allData = [];
-let markerLayer = null;
-let currentRowId = null;
-
-const PASTEL_COLORS = [
-  '#FFB3B3','#FFD9B3','#FFFBB3','#C8FFB3','#B3FFEE','#B3D9FF','#D9B3FF','#FFB3EE',
-  '#FFB3CC','#B3FFD9','#CCB3FF','#FFCCB3','#B3CCFF','#FFB3E0','#E0FFB3','#B3F0FF',
-  '#FFB3A0','#A8FFB3','#F0B3FF','#FFE6B3','#B3FFE6','#FFB3D5','#D5FFB3','#B3EBFF'
-];
-
-function deptColor(code) {
-  let hash = 0;
-  for (let c of String(code)) hash = (hash * 31 + c.charCodeAt(0)) & 0xFFFF;
-  return PASTEL_COLORS[hash % PASTEL_COLORS.length];
-}
-
-function showLoading(v) { document.getElementById('loading').style.display = v ? 'block' : 'none'; }
-
-function showError(msg) {
-  const el = document.getElementById('error-msg');
-  el.style.display = msg ? 'block' : 'none';
-  el.textContent = msg || '';
-}
-
-function saveConfig() {
-  const table   = document.getElementById('cfg-table').value.trim();
-  const lat     = document.getElementById('cfg-lat').value.trim();
-  const lon     = document.getElementById('cfg-lon').value.trim();
-  const popup   = document.getElementById('cfg-popup').value.trim();
-  const filters = document.getElementById('cfg-filters').value.trim();
-
-  if (!table || !lat || !lon) {
-    showError('Veuillez renseigner le nom de la table, la colonne latitude et la colonne longitude.');
-    return;
-  }
-  showError('');
-
-  config = {
-    table, lat, lon,
-    popupCols:  popup   ? popup.split(',').map(s => s.trim()).filter(Boolean)   : [],
-    filterCols: filters ? filters.split(',').map(s => s.trim()).filter(Boolean) : []
-  };
-
-  try { grist.setOptions(config); } catch(e) { console.warn('setOptions:', e); }
-  startApp();
-}
-
-function showConfig() {
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('config-panel').style.display = 'block';
-}
-
-async function startApp() {
-  document.getElementById('config-panel').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-
-  if (!map) initMap();
-  showLoading(true);
-  await loadGeoLayers();
-  await loadData();
-  showLoading(false);
-}
-
-function initMap() {
-  map = L.map('map', { zoomControl: true }).setView([46.5, 2.5], 6);
-  L.tileLayer(
-    'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
-    '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png' +
-    '&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-    { attribution: '© IGN Géoportail', maxZoom: 18 }
-  ).addTo(map);
-  markerLayer = L.layerGroup().addTo(map);
-}
-
-async function loadGeoLayers() {
-  try {
-    const r = await fetch('https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:region&OUTPUTFORMAT=application/json&COUNT=50');
-    const geojson = await r.json();
-    L.geoJSON(geojson, {
-      style: { color: '#444', weight: 2.5, fillOpacity: 0, dashArray: '6,4' }
-    }).addTo(map);
-  } catch(e) { console.warn('Régions:', e); }
-
-  try {
-    const r = await fetch('https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:departement&OUTPUTFORMAT=application/json&COUNT=200');
-    const geojson = await r.json();
-    L.geoJSON(geojson, {
-      style: feature => {
-        const code = feature.properties.insee_dep || feature.properties.code_insee || feature.properties.id || '';
-        return { color: '#888', weight: 1, fillColor: deptColor(code), fillOpacity: 0.35 };
-      },
-      onEachFeature: (feature, layer) => {
-        const nom  = feature.properties.nom_m || feature.properties.nom || '';
-        const code = feature.properties.insee_dep || feature.properties.code_insee || '';
-        if (nom) layer.bindTooltip(`${nom} (${code})`, { sticky: true, opacity: 0.85 });
-      }
-    }).addTo(map);
-  } catch(e) { console.warn('Départements:', e); }
-}
-
-async function loadData() {
-  try {
-    const tableData = await grist.docApi.fetchTable(config.table);
-    const ids = tableData.id || [];
-    allData = ids.map((id, i) => {
-      const row = { id };
-      for (const col of Object.keys(tableData)) {
-        if (col !== 'id') row[col] = tableData[col][i];
-      }
-      return row;
-    });
-    buildFilters();
-    renderMarkers(allData);
-  } catch(e) {
-    showLoading(false);
-    alert('Erreur lors du chargement de la table "' + config.table + '" : ' + e.message);
-  }
-}
-
-function buildFilters() {
-  const container = document.getElementById('filters-container');
-  container.innerHTML = '';
-  (config.filterCols || []).forEach(col => {
-    const values = [...new Set(allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== ''))].sort((a,b) => String(a).localeCompare(String(b)));
-    const group = document.createElement('div');
-    group.className = 'filter-group';
-    const label = document.createElement('label');
-    label.textContent = col + ' :';
-    const select = document.createElement('select');
-    select.id = 'filter-' + col;
-    select.innerHTML = `<option value="">— Tous —</option>` +
-      values.map(v => `<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');
-    select.addEventListener('change', applyFilters);
-    group.appendChild(label);
-    group.appendChild(select);
-    container.appendChild(group);
-  });
-}
-
-function getFiltered() {
-  let filtered = [...allData];
-  (config.filterCols || []).forEach(col => {
-    const sel = document.getElementById('filter-' + col);
-    if (sel && sel.value !== '') filtered = filtered.filter(r => String(r[col]) === sel.value);
-  });
-  return filtered;
-}
-
-function applyFilters() { renderMarkers(getFiltered()); }
-
-function resetFilters() {
-  (config.filterCols || []).forEach(col => {
-    const sel = document.getElementById('filter-' + col);
-    if (sel) sel.value = '';
-  });
-  renderMarkers(allData);
-}
-
-function makeIcon(selected) {
-  return L.divIcon({
-    className: '',
-    html: `<div style="
-      width:${selected?18:11}px; height:${selected?18:11}px;
-      background:${selected?'#e63946':'#2563eb'};
-      border:2px solid ${selected?'#9b1a24':'#1e3a8a'};
-      border-radius:50%;
-      box-shadow:0 1px 4px rgba(0,0,0,0.28);
-      transition:all 0.15s;
-    "></div>`,
-    iconSize: [selected?18:11, selected?18:11],
-    iconAnchor: [selected?9:5.5, selected?9:5.5]
-  });
-}
-
-function renderMarkers(data) {
-  markerLayer.clearLayers();
-  let count = 0;
-  data.forEach(row => {
-    const lat = parseFloat(row[config.lat]);
-    const lon = parseFloat(row[config.lon]);
-    if (isNaN(lat) || isNaN(lon)) return;
-
-    const selected = currentRowId !== null && row.id === currentRowId;
-    const marker = L.marker([lat, lon], { icon: makeIcon(selected) });
-
-    const cols = config.popupCols && config.popupCols.length > 0
-      ? config.popupCols
-      : Object.keys(row).filter(k => k !== 'id' && k !== config.lat && k !== config.lon);
-
-    let html = '<div style="font-size:13px;min-width:160px;max-width:260px;">';
-    cols.forEach(col => {
-      const val = row[col];
-      if (val !== undefined && val !== null && val !== '') {
-        html += `<div style="margin-bottom:5px;">
-          <span style="color:#666;font-size:11px;display:block;">${col}</span>
-          <span style="font-weight:500;">${val}</span>
-        </div>`;
-      }
-    });
-    html += '</div>';
-
-    marker.bindPopup(html, { maxWidth: 280 });
-    marker.on('click', () => {
-      currentRowId = row.id;
-      try { grist.setCursorPos({ rowId: row.id }); } catch(e) {}
-      renderMarkers(getFiltered());
-      marker.openPopup();
-    });
-
-    marker.addTo(markerLayer);
-    if (selected) {
-      marker.openPopup();
-      map.panTo([lat, lon]);
-    }
-    count++;
-  });
-  document.getElementById('count-badge').textContent = `${count} point(s)`;
+function log(title, content, type) {
+  const div = document.createElement('div');
+  div.className = 'block';
+  div.innerHTML = `<strong class="${type||''}">${title}</strong><pre>${
+    typeof content === 'string' ? content : JSON.stringify(content, null, 2)
+  }</pre>`;
+  document.getElementById('log').prepend(div);
 }
 
 grist.ready({ requiredAccess: 'read table' });
 
-grist.onRecord(record => {
-  if (!record || !map) return;
-  currentRowId = record.id;
-  renderMarkers(getFiltered());
+async function testFetchTable() {
+  const name = document.getElementById('table-input').value.trim();
+  if (!name) { alert('Saisissez un nom de table'); return; }
+  log(`fetchTable("${name}") → en cours...`, '', 'info');
+  try {
+    const data = await grist.docApi.fetchTable(name);
+    const cols = Object.keys(data);
+    const nbRows = (data.id || []).length;
+    log(`fetchTable("${name}") ✔ OK`, `${nbRows} ligne(s) — colonnes : ${cols.join(', ')}`, 'ok');
+  } catch(e) {
+    log(`fetchTable("${name}") ✘ ERREUR`, e.message, 'err');
+  }
+}
+
+async function testFetchTableList() {
+  log('listTables → en cours...', '', 'info');
+  try {
+    const tables = await grist.docApi.listTables();
+    log('listTables ✔ OK', tables, 'ok');
+  } catch(e) {
+    log('listTables ✘ ERREUR', e.message, 'err');
+
+    log('Tentative via fetchTable("_grist_Tables")...', '', 'info');
+    try {
+      const meta = await grist.docApi.fetchTable('_grist_Tables');
+      log('_grist_Tables ✔ OK', meta, 'ok');
+    } catch(e2) {
+      log('_grist_Tables ✘ ERREUR', e2.message, 'err');
+    }
+  }
+}
+
+async function testGetDocInfo() {
+  log('getDocInfo → en cours...', '', 'info');
+  try {
+    const info = await grist.docApi.getDocInfo();
+    log('getDocInfo ✔ OK', info, 'ok');
+  } catch(e) {
+    log('getDocInfo ✘ ERREUR', e.message, 'err');
+  }
+}
+
+grist.onRecords((records, mappings) => {
+  log('onRecords reçu', {
+    nbLignes: records.length,
+    mappings: mappings,
+    premiereCleDeLigne: records.length > 0 ? Object.keys(records[0]) : [],
+    exempleRow: records.length > 0 ? records[0] : null
+  }, 'ok');
 });
 
-grist.onOptions(opts => {
-  if (!opts || !opts.table) return;
-  config = opts;
-  document.getElementById('cfg-table').value   = opts.table || '';
-  document.getElementById('cfg-lat').value     = opts.lat   || '';
-  document.getElementById('cfg-lon').value     = opts.lon   || '';
-  document.getElementById('cfg-popup').value   = (opts.popupCols  || []).join(', ');
-  document.getElementById('cfg-filters').value = (opts.filterCols || []).join(', ');
-  if (opts.table && opts.lat && opts.lon) startApp();
-});
+function testOnRecords() {
+  log('onRecords — en attente du prochain événement Grist...', 'Navigue dans la vue principale pour déclencher onRecords', 'info');
+}
 </script>
 </body>
 </html>
