@@ -36,9 +36,33 @@
     padding: 6px 10px; display: flex; flex-wrap: wrap;
     gap: 6px; align-items: center; min-height: 42px; z-index: 10;
   }
-  .filter-group { display: flex; align-items: center; gap: 5px; }
-  .filter-group label { font-size: 11px; color: #555; white-space: nowrap; font-weight: 600; }
-  .filter-group select { padding: 4px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; background: #fff; min-width: 110px; max-width: 180px; }
+  .filter-group { position: relative; display: inline-flex; align-items: center; }
+  .filter-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border: 1px solid #ccc; border-radius: 5px;
+    font-size: 12px; background: #fff; cursor: pointer; white-space: nowrap;
+    color: #333; user-select: none; min-width: 100px;
+  }
+  .filter-btn.active { border-color: #2563eb; background: #eff6ff; color: #1e40af; }
+  .filter-btn .arrow { margin-left: auto; font-size: 10px; }
+  .filter-dropdown {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0;
+    background: #fff; border: 1px solid #ccc; border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999;
+    min-width: 180px; max-height: 240px; overflow-y: auto;
+    padding: 4px 0;
+  }
+  .filter-dropdown.open { display: block; }
+  .filter-option {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer; color: #333;
+  }
+  .filter-option:hover { background: #f5f5f5; }
+  .filter-option input[type=checkbox] { accent-color: #2563eb; cursor: pointer; }
+  .filter-badge {
+    background: #2563eb; color: white; border-radius: 10px;
+    font-size: 10px; padding: 1px 6px; font-weight: 600;
+  }
   #btn-reset-filters { background: none; border: 1px solid #bbb; border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: #555; white-space: nowrap; }
   #btn-reset-filters:hover { background: #f0f0f0; }
   #count-badge { margin-left: auto; font-size: 12px; color: #1e40af; background: #eff6ff; border-radius: 12px; padding: 3px 10px; white-space: nowrap; }
@@ -364,34 +388,90 @@ function processRecords(records) {
   renderMarkers(allData);
 }
 
+const filterSelections = {};
+
 function buildFilters() {
   const container = document.getElementById('filters-container');
   container.innerHTML = '';
+
+  document.removeEventListener('click', closeAllDropdowns);
+  document.addEventListener('click', closeAllDropdowns);
+
   (config.filterCols || []).forEach(col => {
+    filterSelections[col] = new Set();
+
     const values = [...new Set(
       allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '')
     )].sort((a,b) => String(a).localeCompare(String(b), 'fr'));
 
     const group = document.createElement('div');
     group.className = 'filter-group';
-    const label = document.createElement('label');
-    label.textContent = col.replace(/_/g,' ') + ' :';
-    const select = document.createElement('select');
-    select.id = 'filter-' + col;
-    select.innerHTML = `<option value="">— Tous —</option>` +
-      values.map(v => `<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');
-    select.addEventListener('change', applyFilters);
-    group.appendChild(label);
-    group.appendChild(select);
+    group.dataset.col = col;
+
+    const btn = document.createElement('div');
+    btn.className = 'filter-btn';
+    btn.id = 'filter-btn-' + col;
+    btn.innerHTML = `<span class="filter-label">${col.replace(/_/g,' ')}</span><span class="arrow">▾</span>`;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const dd = group.querySelector('.filter-dropdown');
+      const isOpen = dd.classList.contains('open');
+      closeAllDropdowns();
+      if (!isOpen) dd.classList.add('open');
+    });
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown';
+    dropdown.id = 'filter-dd-' + col;
+
+    values.forEach(v => {
+      const opt = document.createElement('label');
+      opt.className = 'filter-option';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = String(v);
+      cb.addEventListener('change', () => {
+        if (cb.checked) filterSelections[col].add(String(v));
+        else filterSelections[col].delete(String(v));
+        updateFilterBtn(col);
+        applyFilters();
+      });
+      opt.appendChild(cb);
+      opt.appendChild(document.createTextNode(v));
+      dropdown.appendChild(opt);
+    });
+
+    group.appendChild(btn);
+    group.appendChild(dropdown);
     container.appendChild(group);
   });
+}
+
+function closeAllDropdowns(e) {
+  document.querySelectorAll('.filter-dropdown.open').forEach(dd => {
+    if (!e || !dd.parentElement.contains(e.target)) dd.classList.remove('open');
+  });
+}
+
+function updateFilterBtn(col) {
+  const btn = document.getElementById('filter-btn-' + col);
+  if (!btn) return;
+  const count = filterSelections[col] ? filterSelections[col].size : 0;
+  const label = col.replace(/_/g,' ');
+  if (count === 0) {
+    btn.className = 'filter-btn';
+    btn.innerHTML = `<span class="filter-label">${label}</span><span class="arrow">▾</span>`;
+  } else {
+    btn.className = 'filter-btn active';
+    btn.innerHTML = `<span class="filter-label">${label}</span><span class="filter-badge">${count}</span><span class="arrow">▾</span>`;
+  }
 }
 
 function getFiltered() {
   let filtered = [...allData];
   (config.filterCols || []).forEach(col => {
-    const sel = document.getElementById('filter-' + col);
-    if (sel && sel.value !== '') filtered = filtered.filter(r => String(r[col]) === sel.value);
+    const sel = filterSelections[col];
+    if (sel && sel.size > 0) filtered = filtered.filter(r => sel.has(String(r[col])));
   });
   return filtered;
 }
@@ -400,9 +480,12 @@ function applyFilters() { renderMarkers(getFiltered()); }
 
 function resetFilters() {
   (config.filterCols || []).forEach(col => {
-    const sel = document.getElementById('filter-' + col);
-    if (sel) sel.value = '';
+    filterSelections[col] = new Set();
+    const dd = document.getElementById('filter-dd-' + col);
+    if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateFilterBtn(col);
   });
+  closeAllDropdowns();
   renderMarkers(allData);
 }
 
