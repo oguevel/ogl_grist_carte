@@ -1,79 +1,443 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-  <style>
-    body { font-family: sans-serif; font-size: 13px; line-height: 1.4; }
-    .status-ok { color: green; font-weight: bold; }
-    .status-error { color: red; font-weight: bold; }
-    .version-tag { background: #eee; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #f4f4f4; }
-    .category { background: #e9ecef; font-weight: bold; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carte IGN - Widget Grist</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; font-size: 13px; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
+
+  #config-panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px auto;
+    max-width: 600px;
+    width: 90%;
+  }
+  #config-panel h2 { font-size: 16px; margin-bottom: 16px; color: #333; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: 500; }
+  .form-group input, .form-group select {
+    width: 100%; padding: 7px 10px; border: 1px solid #ccc;
+    border-radius: 5px; font-size: 13px; background: #fff;
+  }
+  .form-group small { color: #888; font-size: 11px; margin-top: 3px; display: block; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #btn-save {
+    background: #2563eb; color: white; border: none; border-radius: 6px;
+    padding: 9px 22px; font-size: 13px; cursor: pointer; margin-top: 8px;
+  }
+  #btn-save:hover { background: #1d4ed8; }
+  #btn-reset {
+    background: none; border: 1px solid #ccc; border-radius: 6px;
+    padding: 9px 16px; font-size: 12px; cursor: pointer; margin-top: 8px; margin-left: 8px; color: #555;
+  }
+
+  #app { display: none; flex-direction: column; height: 100vh; }
+
+  #toolbar {
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 8px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  #toolbar .filter-group { display: flex; align-items: center; gap: 6px; }
+  #toolbar label { font-size: 12px; color: #555; white-space: nowrap; }
+  #toolbar select {
+    padding: 4px 8px; border: 1px solid #ccc; border-radius: 5px;
+    font-size: 12px; background: #fff; min-width: 120px; max-width: 200px;
+  }
+  #btn-reset-filters {
+    background: none; border: 1px solid #bbb; border-radius: 5px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; color: #555; white-space: nowrap;
+  }
+  #btn-reset-filters:hover { background: #f0f0f0; }
+  #count-badge {
+    margin-left: auto; font-size: 12px; color: #666;
+    background: #e8f4fd; border-radius: 12px; padding: 3px 10px;
+    white-space: nowrap;
+  }
+  #btn-config-small {
+    background: none; border: 1px solid #bbb; border-radius: 5px;
+    padding: 4px 8px; font-size: 12px; cursor: pointer; color: #555;
+  }
+
+  #map { flex: 1; }
+
+  #loading {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: rgba(255,255,255,0.92); padding: 18px 28px; border-radius: 8px;
+    border: 1px solid #ddd; font-size: 14px; color: #333; z-index: 9999;
+    display: none;
+  }
+  #error-msg {
+    background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;
+    padding: 10px 14px; color: #b91c1c; font-size: 12px; margin-top: 10px;
+    display: none;
+  }
+</style>
 </head>
 <body>
-  <h3>Vérification de l'API Grist</h3>
-  <p><strong>Version API REST :</strong> <span class="version-tag">1.0.1</span></p>
-  
-  <table id="results">
-    <thead>
-      <tr>
-        <th>Interface / Fonction</th>
-        <th>Rôle</th>
-        <th>Résultat</th>
-      </tr>
-    </thead>
-    <tbody id="body"></tbody>
-  </table>
 
-  <script>
-    const tests = [
-      { cat: "Noyau Plugin", name: "grist.ready()", role: "Initialisation du widget", test: () => true },
-      { cat: "Noyau Plugin", name: "grist.onRecords", role: "Écoute des données filtrées", test: (data) => !!data },
-      { cat: "API Document", name: "grist.docApi.getDocMeta()", role: "Lecture des métadonnées du document", test: async () => await grist.docApi.getDocMeta() },
-      { cat: "API Document", name: "grist.docApi.listTables()", role: "Énumération des tables du document", test: async () => await grist.docApi.listTables() },
-      { cat: "API Vue", name: "grist.selectedTable", role: "Interaction avec la table active", test: () => !!grist.selectedTable },
-      { cat: "API CRUD", name: "TableOperations.update", role: "Modification de données (Accès complet requis)", test: async () => {
-          if (!grist.selectedTable) throw new Error("Table non sélectionnée");
-          return "Prêt";
-      }}
-    ];
+<div id="loading">Chargement des données...</div>
 
-    async function runTests(records) {
-      const tbody = document.getElementById('body');
-      tbody.innerHTML = '';
-      let lastCat = '';
+<div id="config-panel">
+  <h2>⚙️ Configuration du widget carte</h2>
+  <div id="error-msg"></div>
 
-      for (const t of tests) {
-        if (t.cat !== lastCat) {
-          const catRow = tbody.insertRow();
-          catRow.className = 'category';
-          catRow.innerHTML = `<td colspan="3">${t.cat}</td>`;
-          lastCat = t.cat;
-        }
+  <div class="form-group">
+    <label>URL de l'instance Grist</label>
+    <input type="text" id="cfg-url" placeholder="https://grist.numerique.gouv.fr"/>
+  </div>
+  <div class="form-group">
+    <label>Doc ID</label>
+    <input type="text" id="cfg-docid" placeholder="Ex: 5XVuprVu9RNDGaDRGwJKic"/>
+  </div>
+  <div class="form-group">
+    <label>Clé API Grist</label>
+    <input type="password" id="cfg-apikey" placeholder="••••••••"/>
+    <small>Stockée uniquement dans les options du widget Grist, jamais envoyée ailleurs.</small>
+  </div>
+  <div class="form-group">
+    <label>Nom exact de la table</label>
+    <input type="text" id="cfg-table" placeholder="Ex: Table_mere"/>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Colonne latitude</label>
+      <input type="text" id="cfg-lat" placeholder="lat"/>
+    </div>
+    <div class="form-group">
+      <label>Colonne longitude</label>
+      <input type="text" id="cfg-lon" placeholder="lon"/>
+    </div>
+  </div>
+  <div class="form-group">
+    <label>Colonnes à afficher en popup</label>
+    <input type="text" id="cfg-popup" placeholder="nom, adresse, type (séparées par des virgules)"/>
+  </div>
+  <div class="form-group">
+    <label>Colonnes de filtre</label>
+    <input type="text" id="cfg-filters" placeholder="type, commune (séparées par des virgules)"/>
+    <small>Des menus déroulants seront générés automatiquement pour chaque colonne.</small>
+  </div>
+  <div>
+    <button id="btn-save" onclick="saveConfig()">Enregistrer et charger la carte</button>
+    <button id="btn-reset" onclick="resetConfig()" style="display:none">Réinitialiser</button>
+  </div>
+</div>
 
-        const row = tbody.insertRow();
-        row.insertCell(0).textContent = t.name;
-        row.insertCell(1).textContent = t.role;
-        const resCell = row.insertCell(2);
+<div id="app">
+  <div id="toolbar">
+    <div id="filters-container"></div>
+    <button id="btn-reset-filters" onclick="resetFilters()">Réinitialiser les filtres</button>
+    <span id="count-badge">0 point(s)</span>
+    <button id="btn-config-small" onclick="showConfig()">⚙️ Config</button>
+  </div>
+  <div id="map"></div>
+</div>
 
-        try {
-          const result = await t.test(records);
-          resCell.innerHTML = '<span class="status-ok">✓ Fonctionnelle</span>';
-        } catch (e) {
-          resCell.innerHTML = `<span class="status-error">✗ Erreur / Non autorisé</span><br><small>${e.message}</small>`;
-        }
-      }
+<script>
+let config = {};
+let map = null;
+let allData = [];
+let markers = [];
+let markerLayer = null;
+let deptLayer = null;
+let regionLayer = null;
+let currentRowId = null;
+
+const PASTEL_COLORS = [
+  '#FFB3B3','#FFD9B3','#FFFBB3','#B3FFB3','#B3FFFF','#B3D9FF','#D9B3FF','#FFB3FF',
+  '#FFB3CC','#B3FFD9','#CCB3FF','#FFCCB3','#B3CCFF','#FFB3E6','#B3FFB3','#E6FFB3',
+  '#B3F0FF','#FFB3A0','#A0FFB3','#F0B3FF','#FFE6B3','#B3FFE6','#FFB3D9','#D9FFB3'
+];
+
+function deptColor(code) {
+  let hash = 0;
+  for (let c of String(code)) hash = (hash * 31 + c.charCodeAt(0)) & 0xFFFF;
+  return PASTEL_COLORS[hash % PASTEL_COLORS.length];
+}
+
+function showLoading(v) {
+  document.getElementById('loading').style.display = v ? 'block' : 'none';
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg || '';
+}
+
+function saveConfig() {
+  const url   = document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
+  const docid = document.getElementById('cfg-docid').value.trim();
+  const key   = document.getElementById('cfg-apikey').value.trim();
+  const table = document.getElementById('cfg-table').value.trim();
+  const lat   = document.getElementById('cfg-lat').value.trim();
+  const lon   = document.getElementById('cfg-lon').value.trim();
+  const popup = document.getElementById('cfg-popup').value.trim();
+  const filters = document.getElementById('cfg-filters').value.trim();
+
+  if (!url || !docid || !key || !table || !lat || !lon) {
+    showError('Veuillez remplir tous les champs obligatoires (URL, Doc ID, Clé API, Table, Latitude, Longitude).');
+    return;
+  }
+  showError('');
+
+  config = {
+    url, docid, key, table, lat, lon,
+    popupCols: popup ? popup.split(',').map(s => s.trim()).filter(Boolean) : [],
+    filterCols: filters ? filters.split(',').map(s => s.trim()).filter(Boolean) : []
+  };
+
+  try {
+    grist.setOptions(config);
+  } catch(e) {}
+
+  startApp();
+}
+
+function resetConfig() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('config-panel').style.display = 'block';
+  document.getElementById('btn-reset').style.display = 'none';
+}
+
+function showConfig() { resetConfig(); }
+
+async function startApp() {
+  document.getElementById('config-panel').style.display = 'none';
+  document.getElementById('btn-reset').style.display = 'inline-block';
+  document.getElementById('app').style.display = 'flex';
+
+  if (!map) initMap();
+  await loadGeoLayers();
+  await loadData();
+}
+
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView([46.5, 2.5], 6);
+
+  L.tileLayer(
+    'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
+    '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png' +
+    '&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+    { attribution: '© IGN Géoportail', maxZoom: 18 }
+  ).addTo(map);
+
+  markerLayer = L.layerGroup().addTo(map);
+}
+
+async function loadGeoLayers() {
+  try {
+    await loadRegions();
+  } catch(e) { console.warn('Régions non chargées:', e); }
+  try {
+    await loadDepts();
+  } catch(e) { console.warn('Départements non chargés:', e); }
+}
+
+async function loadRegions() {
+  const url = 'https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature' +
+    '&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:region&OUTPUTFORMAT=application/json&COUNT=50';
+  const resp = await fetch(url);
+  const geojson = await resp.json();
+  if (regionLayer) map.removeLayer(regionLayer);
+  regionLayer = L.geoJSON(geojson, {
+    style: { color: '#555', weight: 2, fillOpacity: 0, dashArray: '5,4' }
+  }).addTo(map);
+}
+
+async function loadDepts() {
+  const url = 'https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature' +
+    '&TYPENAME=ADMINEXPRESS-COG-CARTO.LATEST:departement&OUTPUTFORMAT=application/json&COUNT=200';
+  const resp = await fetch(url);
+  const geojson = await resp.json();
+  if (deptLayer) map.removeLayer(deptLayer);
+  deptLayer = L.geoJSON(geojson, {
+    style: feature => {
+      const code = feature.properties.insee_dep || feature.properties.code_insee || feature.properties.id || '';
+      return {
+        color: '#777',
+        weight: 1,
+        fillColor: deptColor(code),
+        fillOpacity: 0.35
+      };
+    },
+    onEachFeature: (feature, layer) => {
+      const nom = feature.properties.nom_m || feature.properties.nom || '';
+      const code = feature.properties.insee_dep || feature.properties.code_insee || '';
+      if (nom) layer.bindTooltip(`${nom} (${code})`, { sticky: true, opacity: 0.85 });
     }
+  }).addTo(map);
+}
 
-    // Lancement de l'API
-    grist.ready({ requiredAccess: 'full' });
-    grist.onRecords((records) => {
-      runTests(records);
+async function loadData() {
+  showLoading(true);
+  try {
+    const url = `${config.url}/api/docs/${config.docid}/tables/${config.table}/records`;
+    const resp = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${config.key}` }
     });
-  </script>
+    if (!resp.ok) throw new Error(`Erreur API Grist : ${resp.status} ${resp.statusText}`);
+    const json = await resp.json();
+    allData = (json.records || []).map(r => ({ id: r.id, ...r.fields }));
+    buildFilters();
+    renderMarkers(allData);
+  } catch(e) {
+    alert('Erreur lors du chargement des données : ' + e.message);
+  } finally {
+    showLoading(false);
+  }
+}
+
+function buildFilters() {
+  const container = document.getElementById('filters-container');
+  container.innerHTML = '';
+  config.filterCols.forEach(col => {
+    const values = [...new Set(allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== ''))].sort();
+    const group = document.createElement('div');
+    group.className = 'filter-group';
+    const label = document.createElement('label');
+    label.textContent = col + ' :';
+    const select = document.createElement('select');
+    select.id = 'filter-' + col;
+    select.innerHTML = `<option value="">— Tous —</option>` +
+      values.map(v => `<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');
+    select.addEventListener('change', applyFilters);
+    group.appendChild(label);
+    group.appendChild(select);
+    container.appendChild(group);
+  });
+}
+
+function applyFilters() {
+  let filtered = [...allData];
+  config.filterCols.forEach(col => {
+    const sel = document.getElementById('filter-' + col);
+    if (sel && sel.value !== '') {
+      filtered = filtered.filter(r => String(r[col]) === sel.value);
+    }
+  });
+  renderMarkers(filtered);
+}
+
+function resetFilters() {
+  config.filterCols.forEach(col => {
+    const sel = document.getElementById('filter-' + col);
+    if (sel) sel.value = '';
+  });
+  renderMarkers(allData);
+}
+
+function renderMarkers(data) {
+  markerLayer.clearLayers();
+  markers = [];
+  let count = 0;
+
+  data.forEach(row => {
+    const lat = parseFloat(row[config.lat]);
+    const lon = parseFloat(row[config.lon]);
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    const isSelected = currentRowId !== null && row.id === currentRowId;
+
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="
+        width:${isSelected ? 18 : 12}px;
+        height:${isSelected ? 18 : 12}px;
+        background:${isSelected ? '#e63946' : '#2563eb'};
+        border:2px solid ${isSelected ? '#9b1a24' : '#1e3a8a'};
+        border-radius:50%;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      "></div>`,
+      iconSize: [isSelected ? 18 : 12, isSelected ? 18 : 12],
+      iconAnchor: [isSelected ? 9 : 6, isSelected ? 9 : 6]
+    });
+
+    const marker = L.marker([lat, lon], { icon });
+
+    let popupHtml = '<div style="font-size:13px;min-width:160px;">';
+    const cols = config.popupCols.length > 0 ? config.popupCols : Object.keys(row).filter(k => k !== 'id');
+    cols.forEach(col => {
+      if (row[col] !== undefined && row[col] !== null && row[col] !== '') {
+        popupHtml += `<div style="margin-bottom:4px;"><span style="color:#666;font-size:11px;">${col}</span><br><strong>${row[col]}</strong></div>`;
+      }
+    });
+    popupHtml += '</div>';
+
+    marker.bindPopup(popupHtml);
+    marker.on('click', () => {
+      try { grist.setCursorPos({ rowId: row.id }); } catch(e) {}
+      currentRowId = row.id;
+    });
+
+    marker.addTo(markerLayer);
+    markers.push({ marker, id: row.id });
+    count++;
+  });
+
+  document.getElementById('count-badge').textContent = `${count} point(s)`;
+}
+
+function highlightMarker(rowId) {
+  currentRowId = rowId;
+  const filtered = getCurrentFiltered();
+  renderMarkers(filtered);
+  const entry = markers.find(m => m.id === rowId);
+  if (entry) {
+    map.panTo(entry.marker.getLatLng());
+    entry.marker.openPopup();
+  }
+}
+
+function getCurrentFiltered() {
+  let filtered = [...allData];
+  if (config.filterCols) {
+    config.filterCols.forEach(col => {
+      const sel = document.getElementById('filter-' + col);
+      if (sel && sel.value !== '') {
+        filtered = filtered.filter(r => String(r[col]) === sel.value);
+      }
+    });
+  }
+  return filtered;
+}
+
+grist.ready({ requiredAccess: 'read table' });
+
+grist.onRecord(record => {
+  if (!record || !map) return;
+  highlightMarker(record.id);
+});
+
+grist.onOptions(opts => {
+  if (!opts) return;
+  config = opts;
+  document.getElementById('cfg-url').value    = opts.url    || '';
+  document.getElementById('cfg-docid').value  = opts.docid  || '';
+  document.getElementById('cfg-apikey').value = opts.key    || '';
+  document.getElementById('cfg-table').value  = opts.table  || '';
+  document.getElementById('cfg-lat').value    = opts.lat    || '';
+  document.getElementById('cfg-lon').value    = opts.lon    || '';
+  document.getElementById('cfg-popup').value  = (opts.popupCols  || []).join(', ');
+  document.getElementById('cfg-filters').value= (opts.filterCols || []).join(', ');
+
+  if (opts.url && opts.docid && opts.key && opts.table && opts.lat && opts.lon) {
+    startApp();
+  }
+});
+</script>
 </body>
 </html>
