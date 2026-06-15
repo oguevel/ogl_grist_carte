@@ -23,6 +23,7 @@
       font-family: Arial, sans-serif;
       font-size: 14px;
       font-weight: bold;
+      max-width: 300px;
     }
     #loading {
       position: absolute;
@@ -139,7 +140,7 @@
       
       map.on('load', function() {
         mapLoaded = true;
-        console.log(" Carte IGN initialisée avec succès.");
+        console.log(" Carte IGN initialisée.");
         
         map.addSource('departement-contour', {
           'type': 'geojson',
@@ -163,8 +164,16 @@
     }
 
     async function loadDepartementContour(deptCode) {
+      // Si le code ressemble à un nom de DROM-COM textuel et pas à un code INSEE numérique, on ignore le contour AdminExpress
+      if (!deptCode || !/^\d/.test(deptCode)) {
+        console.log(`ℹ️ Contour IGN ignoré pour la valeur textuelle : ${deptCode}`);
+        if (map.getSource('departement-contour')) {
+          map.getSource('departement-contour').setData({ 'type': 'FeatureCollection', 'features': [] });
+        }
+        return;
+      }
+
       const loading = document.getElementById('loading');
-      const info = document.getElementById('info');
       loading.style.display = 'block';
       
       try {
@@ -188,9 +197,6 @@
         
         const bounds = calculateBoundsFromFeatures(geojson.features);
         map.fitBounds(bounds, { padding: 50, duration: 2000, maxZoom: 10 });
-        
-        const deptName = geojson.features[0].properties.nom || 'Département';
-        info.textContent = `${deptName} (${deptCode})`;
         
       } catch (error) {
         console.warn('Erreur contour IGN:', error.message);
@@ -230,46 +236,51 @@
       let centroidVal = record[mappings.centroid];
       const mainLabelVal = record[mappings.mainLabel];
       
-      console.log("🔍 Données reçues pour le marqueur -> Libellé:", mainLabelVal, "| Coordonnées brutes:", centroidVal);
+      console.log("🔍 Analyse -> Libellé:", mainLabelVal, "| Coordonnées:", centroidVal);
 
-      if (!centroidVal || !mainLabelVal) {
-        console.error("❌ Annulation : Le libellé ou les coordonnées de Grist sont vides.");
+      if (!centroidVal || String(centroidVal).trim() === "") {
+        console.warn("⚠️ Coordonnées vides pour cet enregistrement.");
+        document.getElementById('info').textContent = `${mainLabelVal} (⚠️ Pas de coordonnées)`;
         return;
       }
 
-      // Si Grist renvoie un objet/tableau (ex: format Position natif), on extrait le texte
+      // Traitement si format objet Grist
       if (typeof centroidVal === 'object') {
         if (Array.isArray(centroidVal)) {
           centroidVal = centroidVal.join(',');
         } else if (centroidVal.long && centroidVal.lat) {
           centroidVal = `${centroidVal.lat},${centroidVal.long}`;
-        } else {
-          centroidVal = JSON.stringify(centroidVal);
         }
       }
 
-      // Découpage intelligent : accepte les virgules, points-virgules ou espaces comme séparateurs
+      // Nettoyage et découpage de la chaîne
       const parts = String(centroidVal).split(/[\s,;]+/).filter(p => p.trim() !== "");
       const coords = parts.map(c => parseFloat(c.trim()));
       
       if (coords.length < 2 || isNaN(coords[0]) || isNaN(coords[1])) {
-        console.error("❌ Échec du découpage des coordonnées. Obtenu après analyse:", coords);
+        console.error("❌ Impossible de lire les coordonnées numériques:", coords);
+        document.getElementById('info').textContent = `${mainLabelVal} (❌ Coordonnées invalides)`;
         return;
       }
 
-      // --- AJUSTEMENT LATITUDE / LONGITUDE ---
-      // En France métropolitaine, la latitude est TOUJOURS comprise entre 41 et 52. 
-      // La longitude est comprise entre -5 et 10. Le script inverse automatiquement si nécessaire.
+      // --- DÉTECTION LATITUDE / LONGITUDE MONDIALE ---
+      // La latitude mondiale est TOUJOURS comprise entre -90 et 90.
+      // La longitude mondiale est comprise entre -180 et 180.
+      // Souvent, le format humain est [Lat, Lng]. MapLibre attend strictement [Lng, Lat].
       let lat, lng;
-      if (coords[0] > 40 && coords[0] < 53) {
+      
+      // Règle empirique de bascule : la valeur la plus proche d'un axe réaliste de latitude pour la zone étudiée.
+      // Si la première valeur est entre -60 et 90 et que la deuxième dépasse 90 ou -90 (impossible pour une latitude), la première est la latitude.
+      if (Math.abs(coords[0]) <= 90 && (Math.abs(coords[1]) > 90 || (coords[0] > 40 && coords[0] < 52))) {
         lat = coords[0];
         lng = coords[1];
       } else {
+        // Par défaut ou si l'inverse est détecté
         lng = coords[0];
         lat = coords[1];
       }
 
-      console.log(`📍 Épingle validée -> Latitude finale: ${lat}, Longitude finale: ${lng}`);
+      console.log(`📍 Positionnement valide -> [Lng: ${lng}, Lat: ${lat}]`);
 
       const markerContainer = document.createElement('div');
       markerContainer.className = 'marker-container';
@@ -287,17 +298,15 @@
         .setLngLat([lng, lat])
         .addTo(map);
 
-      // Centrage automatique de la vue sur l'établissement
-      map.flyTo({ center: [lng, lat], zoom: 14, duration: 1200 });
+      // Recentre la carte de manière fluide sur le point mondial (Marche en métropole comme aux îles)
+      map.flyTo({ center: [lng, lat], zoom: 13, duration: 1200 });
 
-      // Fenêtre Pop-up au clic
+      // Popup
       markerContainer.addEventListener('click', (e) => {
         e.stopPropagation();
-        
         map.flyTo({ center: [lng, lat], zoom: 16, duration: 1000 });
 
         let popupHtml = `<div class="popup-content"><div class="popup-title">${mainLabelVal}</div>`;
-        
         if (mappings.secondaryFields && mappings.secondaryFields.length > 0) {
           mappings.secondaryFields.forEach(fieldKey => {
             const fieldLabel = grist.getRealColumnName(fieldKey) || fieldKey;
@@ -329,11 +338,7 @@
     }
 
     async function handleRecordSelection(record) {
-      if (!record) return;
-      if (!currentMappings) {
-        console.warn("⚠️ Mappings Grist non disponibles pour le moment.");
-        return;
-      }
+      if (!record || !currentMappings) return;
       if (!mapLoaded) {
         setTimeout(() => handleRecordSelection(record), 500);
         return;
@@ -349,16 +354,14 @@
           currentDepartement = deptCode;
           await loadDepartementContour(deptCode);
         }
-      } else {
-        currentDepartement = null;
-        if (map.getSource('departement-contour')) {
-          map.getSource('departement-contour').setData({ 'type': 'FeatureCollection', 'features': [] });
-        }
       }
       
       if (mainLabelVal) {
         addMarker(record, currentMappings);
-        info.textContent = mainLabelVal;
+        // Si addMarker n'a pas écrasé le texte à cause d'une erreur de coordonnées, on met le titre classique
+        if (!info.textContent.includes('⚠️') && !info.textContent.includes('❌')) {
+          info.textContent = mainLabelVal;
+        }
       } else {
         clearMarker();
         info.textContent = "Sélectionnez un enregistrement";
