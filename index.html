@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Carte IGN Dynamique Grist</title>
+  <title>Carte IGN Département</title>
   
   <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
   <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
@@ -23,7 +23,6 @@
       font-family: Arial, sans-serif;
       font-size: 14px;
       font-weight: bold;
-      max-width: 300px;
     }
     #loading {
       position: absolute;
@@ -37,45 +36,39 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     
-    /* Configuration du marqueur */
+    /* Conteneur global du marqueur géré par MapLibre */
     .marker-container {
       position: relative;
-      width: 30px;
-      height: 30px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     
+    /* Point blanc de 20px avec bordure noire de 1px */
     .custom-marker {
-      width: 30px;
-      height: 30px;
-      border-radius: 50% 50% 50% 0;
-      background: #e74c3c;
-      transform: rotate(-45deg); 
-      position: absolute;
+      width: 20px;
+      height: 20px;
+      background-color: white;
+      border: 1px solid black;
+      border-radius: 50%;
       cursor: pointer;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      box-sizing: border-box; /* Garantit que la bordure reste incluse dans les 20px */
       transition: transform 0.2s;
     }
     
-    .custom-marker::after {
-      content: '';
-      width: 14px;
-      height: 14px;
-      margin: 8px 0 0 8px;
-      background: white;
-      position: absolute;
-      border-radius: 50%;
+    .custom-marker:hover {
+      transform: scale(1.2);
     }
     
-    .marker-container:hover .custom-marker {
-      transform: rotate(-45deg) scale(1.1);
-    }
-
+    /* Label à côté du point - Aligné horizontalement */
     .marker-label {
       position: absolute;
-      left: 40px;
-      top: 3px;
+      left: 28px; /* Décalé de manière fluide par rapport au point */
       background: white;
-      padding: 6px 10px;
+      padding: 4px 8px;
       border-radius: 4px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
       white-space: nowrap;
@@ -84,38 +77,11 @@
       font-weight: 600;
       color: #333;
       pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s ease-in-out;
-    }
-
-    .marker-container:hover .marker-label {
-      opacity: 1;
-    }
-    
-    .popup-content {
-      font-family: Arial, sans-serif;
-      font-size: 12px;
-      color: #333;
-      max-width: 250px;
-    }
-    .popup-title {
-      font-size: 14px;
-      font-weight: bold;
-      margin-bottom: 6px;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 4px;
-    }
-    .popup-field {
-      margin: 4px 0;
-    }
-    .popup-label {
-      font-weight: bold;
-      color: #666;
     }
   </style>
 </head>
 <body>
-  <div id="info">Sélectionnez un enregistrement</div>
+  <div id="info">Sélectionnez un établissement</div>
   <div id="loading">Chargement...</div>
   <div id="map"></div>
 
@@ -125,7 +91,6 @@
     let currentDepartement = null;
     let mapLoaded = false;
     let currentMarker = null; 
-    let currentMappings = null; 
     
     function initMap() {
       map = new maplibregl.Map({
@@ -140,40 +105,41 @@
       
       map.on('load', function() {
         mapLoaded = true;
-        console.log(" Carte IGN initialisée.");
         
         map.addSource('departement-contour', {
           'type': 'geojson',
-          'data': { 'type': 'FeatureCollection', 'features': [] }
+          'data': {
+            'type': 'FeatureCollection',
+            'features': []
+          }
         });
 
         map.addLayer({
           'id': 'departement-fill',
           'type': 'fill',
           'source': 'departement-contour',
-          'paint': { 'fill-color': '#3887be', 'fill-opacity': 0.15 }
+          'paint': {
+            'fill-color': '#3887be',
+            'fill-opacity': 0.15
+          }
         });
 
         map.addLayer({
           'id': 'departement-outline',
           'type': 'line',
           'source': 'departement-contour',
-          'paint': { 'line-color': '#3887be', 'line-width': 3, 'line-opacity': 0.8 }
+          'paint': {
+            'line-color': '#3887be',
+            'line-width': 3,
+            'line-opacity': 0.8
+          }
         });
       });
     }
 
     async function loadDepartementContour(deptCode) {
-      // Si le code ressemble à un nom de DROM-COM textuel et pas à un code INSEE numérique, on ignore le contour AdminExpress
-      if (!deptCode || !/^\d/.test(deptCode)) {
-        console.log(`ℹ️ Contour IGN ignoré pour la valeur textuelle : ${deptCode}`);
-        if (map.getSource('departement-contour')) {
-          map.getSource('departement-contour').setData({ 'type': 'FeatureCollection', 'features': [] });
-        }
-        return;
-      }
-
       const loading = document.getElementById('loading');
+      const info = document.getElementById('info');
       loading.style.display = 'block';
       
       try {
@@ -189,20 +155,28 @@
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
         const geojson = await response.json();
-        if (!geojson.features || geojson.features.length === 0) throw new Error('Aucun département trouvé');
+        
+        if (!geojson.features || geojson.features.length === 0) {
+          throw new Error('Aucun département trouvé');
+        }
         
         if (map.getSource('departement-contour')) {
           map.getSource('departement-contour').setData(geojson);
         }
         
         const bounds = calculateBoundsFromFeatures(geojson.features);
-        map.fitBounds(bounds, { padding: 50, duration: 2000, maxZoom: 10 });
+        map.fitBounds(bounds, {
+          padding: 50,
+          duration: 2000,
+          maxZoom: 10
+        });
+        
+        const deptName = geojson.features[0].properties.nom || 'Département';
+        info.textContent = `${deptName} (${deptCode})`;
         
       } catch (error) {
-        console.warn('Erreur contour IGN:', error.message);
-        if (map.getSource('departement-contour')) {
-          map.getSource('departement-contour').setData({ 'type': 'FeatureCollection', 'features': [] });
-        }
+        console.error('Erreur lors du chargement du contour:', error);
+        info.textContent = `Département ${deptCode}`;
       } finally {
         loading.style.display = 'none';
       }
@@ -220,107 +194,80 @@
           });
         }
       });
+      
       if (allCoords.length === 0) return [[-5, 41], [10, 51]];
+      
       const lngs = allCoords.map(c => c[0]);
       const lats = allCoords.map(c => c[1]);
-      return [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]];
+      
+      return [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)]
+      ];
     }
 
     function clearMarker() {
-      if (currentMarker) { currentMarker.remove(); currentMarker = null; }
+      if (currentMarker) {
+        currentMarker.remove();
+        currentMarker = null;
+      }
     }
 
-    function addMarker(record, mappings) {
+    function addMarker(record) {
       clearMarker();
       
-      let centroidVal = record[mappings.centroid];
-      const mainLabelVal = record[mappings.mainLabel];
-      
-      console.log("🔍 Analyse -> Libellé:", mainLabelVal, "| Coordonnées:", centroidVal);
+      if (!record.centroid || !record.uai_libelle_administratif) return;
 
-      if (!centroidVal || String(centroidVal).trim() === "") {
-        console.warn("⚠️ Coordonnées vides pour cet enregistrement.");
-        document.getElementById('info').textContent = `${mainLabelVal} (⚠️ Pas de coordonnées)`;
-        return;
-      }
+      const coords = record.centroid.split(',').map(c => parseFloat(c.trim()));
+      if (coords.length !== 2 || isNaN(coords[0]) || isNaN(coords[1])) return;
 
-      // Traitement si format objet Grist
-      if (typeof centroidVal === 'object') {
-        if (Array.isArray(centroidVal)) {
-          centroidVal = centroidVal.join(',');
-        } else if (centroidVal.long && centroidVal.lat) {
-          centroidVal = `${centroidVal.lat},${centroidVal.long}`;
-        }
-      }
+      const [lat, lng] = coords;
 
-      // Nettoyage et découpage de la chaîne
-      const parts = String(centroidVal).split(/[\s,;]+/).filter(p => p.trim() !== "");
-      const coords = parts.map(c => parseFloat(c.trim()));
-      
-      if (coords.length < 2 || isNaN(coords[0]) || isNaN(coords[1])) {
-        console.error("❌ Impossible de lire les coordonnées numériques:", coords);
-        document.getElementById('info').textContent = `${mainLabelVal} (❌ Coordonnées invalides)`;
-        return;
-      }
-
-      // --- DÉTECTION LATITUDE / LONGITUDE MONDIALE ---
-      // La latitude mondiale est TOUJOURS comprise entre -90 et 90.
-      // La longitude mondiale est comprise entre -180 et 180.
-      // Souvent, le format humain est [Lat, Lng]. MapLibre attend strictement [Lng, Lat].
-      let lat, lng;
-      
-      // Règle empirique de bascule : la valeur la plus proche d'un axe réaliste de latitude pour la zone étudiée.
-      // Si la première valeur est entre -60 et 90 et que la deuxième dépasse 90 ou -90 (impossible pour une latitude), la première est la latitude.
-      if (Math.abs(coords[0]) <= 90 && (Math.abs(coords[1]) > 90 || (coords[0] > 40 && coords[0] < 52))) {
-        lat = coords[0];
-        lng = coords[1];
-      } else {
-        // Par défaut ou si l'inverse est détecté
-        lng = coords[0];
-        lat = coords[1];
-      }
-
-      console.log(`📍 Positionnement valide -> [Lng: ${lng}, Lat: ${lat}]`);
-
+      // 1. Création du conteneur principal neutre
       const markerContainer = document.createElement('div');
       markerContainer.className = 'marker-container';
       
+      // 2. Création du point circulaire
       const pinElement = document.createElement('div');
       pinElement.className = 'custom-marker';
       markerContainer.appendChild(pinElement);
       
+      // 3. Création du label (horizontal)
       const labelElement = document.createElement('div');
       labelElement.className = 'marker-label';
-      labelElement.textContent = mainLabelVal;
+      labelElement.textContent = record.uai_libelle_administratif;
       markerContainer.appendChild(labelElement);
 
-      currentMarker = new maplibregl.Marker({ element: markerContainer, anchor: 'bottom' })
+      // 4. Instanciation du marqueur avec ancrage au centre ('center') pour le point circulaire
+      currentMarker = new maplibregl.Marker({
+        element: markerContainer,
+        anchor: 'center'
+      })
         .setLngLat([lng, lat])
         .addTo(map);
 
-      // Recentre la carte de manière fluide sur le point mondial (Marche en métropole comme aux îles)
-      map.flyTo({ center: [lng, lat], zoom: 13, duration: 1200 });
-
-      // Popup
+      // Événement clic
       markerContainer.addEventListener('click', (e) => {
         e.stopPropagation();
-        map.flyTo({ center: [lng, lat], zoom: 16, duration: 1000 });
+        
+        map.flyTo({
+          center: [lng, lat],
+          zoom: 16,
+          duration: 1500
+        });
 
-        let popupHtml = `<div class="popup-content"><div class="popup-title">${mainLabelVal}</div>`;
-        if (mappings.secondaryFields && mappings.secondaryFields.length > 0) {
-          mappings.secondaryFields.forEach(fieldKey => {
-            const fieldLabel = grist.getRealColumnName(fieldKey) || fieldKey;
-            const fieldValue = record[fieldKey];
-            if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
-              popupHtml += `<div class="popup-field"><span class="popup-label">${fieldLabel} :</span> ${fieldValue}</div>`;
-            }
-          });
-        }
-        popupHtml += `</div>`;
-
-        new maplibregl.Popup({ offset: 35, closeButton: true, closeOnClick: false })
+        new maplibregl.Popup({ 
+          offset: 15, // Ajusté pour le point circulaire
+          closeButton: true,
+          closeOnClick: false
+        })
           .setLngLat([lng, lat])
-          .setHTML(popupHtml)
+          .setHTML(`
+            <div style="font-family: Arial, sans-serif;">
+              <strong style="font-size: 14px;">${record.uai_libelle_administratif}</strong><br>
+              ${record.carte_departement ? '<span style="font-size: 12px; color: #666;">Département: ' + record.carte_departement + '</span>' : ''}
+            </div>
+          `)
           .addTo(map);
       });
     }
@@ -338,55 +285,32 @@
     }
 
     async function handleRecordSelection(record) {
-      if (!record || !currentMappings) return;
+      if (!record) return;
       if (!mapLoaded) {
         setTimeout(() => handleRecordSelection(record), 500);
         return;
       }
       
       const info = document.getElementById('info');
-      const mainLabelVal = record[currentMappings.mainLabel];
-      const deptVal = currentMappings.departement ? record[currentMappings.departement] : null;
       
-      if (deptVal) {
-        const deptCode = normalizeDeptCode(deptVal);
+      if (record.centroid && record.uai_libelle_administratif) {
+        addMarker(record);
+        info.textContent = record.uai_libelle_administratif;
+      }
+      
+      if (record.carte_departement) {
+        const deptCode = normalizeDeptCode(record.carte_departement);
         if (deptCode && currentDepartement !== deptCode) {
           currentDepartement = deptCode;
           await loadDepartementContour(deptCode);
         }
       }
-      
-      if (mainLabelVal) {
-        addMarker(record, currentMappings);
-        // Si addMarker n'a pas écrasé le texte à cause d'une erreur de coordonnées, on met le titre classique
-        if (!info.textContent.includes('⚠️') && !info.textContent.includes('❌')) {
-          info.textContent = mainLabelVal;
-        }
-      } else {
-        clearMarker();
-        info.textContent = "Sélectionnez un enregistrement";
-      }
     }
 
-    // --- CONFIGURATION GRIST ---
+    // Grist API
     grist.ready({
-      requiredAccess: 'read table',
-      columns: [
-        { name: "centroid", type: "Text", title: "Coordonnées (Lat, Lng)", optional: false },
-        { name: "mainLabel", type: "Text", title: "Champ Principal (Survol)", optional: false },
-        { name: "departement", type: "Text", title: "Code ou Nom Département", optional: true },
-        { name: "secondaryFields", type: "Any", title: "Champs Secondaires (Popup Clic)", allowMultiple: true, optional: true }
-      ]
-    });
-
-    grist.onRecords(function(records, mappings) {
-      if (mappings) {
-        currentMappings = mappings;
-        const activeRecord = records[0]; 
-        if (activeRecord) {
-          handleRecordSelection(activeRecord);
-        }
-      }
+      columns: ['carte_departement', 'centroid', 'uai_libelle_administratif'],
+      requiredAccess: 'read table'
     });
 
     grist.onRecord(function(record) {
