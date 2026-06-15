@@ -65,7 +65,7 @@
       border-radius: 50%;
     }
     
-    /* Changement d'état au survol de l'élément parent */
+    /* Changement d'état au survol */
     .marker-container:hover .custom-marker {
       transform: rotate(-45deg) scale(1.1);
     }
@@ -127,7 +127,7 @@
     let currentDepartement = null;
     let mapLoaded = false;
     let currentMarker = null; 
-    let currentMappings = null; // Stocke la configuration des colonnes Grist
+    let currentMappings = null; 
     
     function initMap() {
       map = new maplibregl.Map({
@@ -195,8 +195,11 @@
         info.textContent = `${deptName} (${deptCode})`;
         
       } catch (error) {
-        console.error('Erreur contour:', error);
-        info.textContent = `Département ${deptCode}`;
+        console.warn('Erreur contour IGN ignorée pour ne pas bloquer l\'affichage:', error);
+        // On nettoie le contour précédent en cas d'échec pour éviter les incohérences visuelles
+        if (map.getSource('departement-contour')) {
+          map.getSource('departement-contour').setData({ 'type': 'FeatureCollection', 'features': [] });
+        }
       } finally {
         loading.style.display = 'none';
       }
@@ -227,7 +230,6 @@
     function addMarker(record, mappings) {
       clearMarker();
       
-      // Extraction dynamique des données selon les mappings définis par l'utilisateur
       const centroidVal = record[mappings.centroid];
       const mainLabelVal = record[mappings.mainLabel];
       
@@ -244,7 +246,6 @@
       pinElement.className = 'custom-marker';
       markerContainer.appendChild(pinElement);
       
-      // Label masqué par défaut, visible uniquement en :hover via CSS
       const labelElement = document.createElement('div');
       labelElement.className = 'marker-label';
       labelElement.textContent = mainLabelVal;
@@ -254,18 +255,19 @@
         .setLngLat([lng, lat])
         .addTo(map);
 
-      // Génération dynamique de la popup (champs secondaires)
+      // Centrage initial de la carte sur le nouveau marqueur si aucun contour n'a pu zoomer
+      map.flyTo({ center: [lng, lat], zoom: map.getZoom() < 8 ? 12 : map.getZoom(), duration: 1000 });
+
+      // Génération de la popup au clic
       markerContainer.addEventListener('click', (e) => {
         e.stopPropagation();
         
         map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
 
-        // Construction du HTML pour la popup
         let popupHtml = `<div class="popup-content"><div class="popup-title">${mainLabelVal}</div>`;
         
         if (mappings.secondaryFields && mappings.secondaryFields.length > 0) {
           mappings.secondaryFields.forEach(fieldKey => {
-            // Grist fournit les étiquettes réelles des colonnes dans l'objet de configuration
             const fieldLabel = grist.getRealColumnName(fieldKey) || fieldKey;
             const fieldValue = record[fieldKey];
             if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
@@ -305,22 +307,33 @@
       const mainLabelVal = record[currentMappings.mainLabel];
       const deptVal = currentMappings.departement ? record[currentMappings.departement] : null;
       
-      if (record[currentMappings.centroid] && mainLabelVal) {
-        addMarker(record, currentMappings);
-        info.textContent = mainLabelVal;
-      }
-      
+      // 1. Gestion du contour du département (Encapsulé dans un bloc indépendant)
       if (deptVal) {
         const deptCode = normalizeDeptCode(deptVal);
         if (deptCode && currentDepartement !== deptCode) {
           currentDepartement = deptCode;
+          // L'utilisation de await ici attend la fin de la fonction, mais les erreurs internes 
+          // à loadDepartementContour étant désormais capturées (try/catch), elles ne bloquent plus la suite.
           await loadDepartementContour(deptCode);
         }
+      } else {
+        currentDepartement = null;
+        if (map.getSource('departement-contour')) {
+          map.getSource('departement-contour').setData({ 'type': 'FeatureCollection', 'features': [] });
+        }
+      }
+      
+      // 2. Gestion de l'affichage de l'épingle (S'exécute quoi qu'il arrive)
+      if (record[currentMappings.centroid] && mainLabelVal) {
+        addMarker(record, currentMappings);
+        info.textContent = mainLabelVal;
+      } else {
+        clearMarker();
+        info.textContent = "Sélectionnez un enregistrement";
       }
     }
 
     // --- CONFIGURATION DYNAMIQUE GRIST ---
-    // On définit la structure attendue dans l'interface de paramétrage de Grist
     grist.ready({
       requiredAccess: 'read table',
       columns: [
@@ -331,11 +344,9 @@
       ]
     });
 
-    // Écouteur qui reçoit les données et les configurations associées
     grist.onRecords(function(records, mappings) {
       if (mappings) {
         currentMappings = mappings;
-        // On récupère le premier enregistrement sélectionné/actif
         const activeRecord = records[0]; 
         if (activeRecord) {
           handleRecordSelection(activeRecord);
@@ -343,7 +354,6 @@
       }
     });
 
-    // Prise en compte du changement de ligne active
     grist.onRecord(function(record) {
       handleRecordSelection(record);
     });
