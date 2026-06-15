@@ -35,20 +35,59 @@
       z-index: 1000;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-
-    /* ============================================================
-       MODIFICATION : NOUVELLE STYLE DU MARQUEUR = POINT 20 PX
-       ============================================================ */
-    .point-marker {
-      width: 20px;
-      height: 20px;
-      background: red;
-      border: 1px solid black;
-      border-radius: 50%;
-      cursor: pointer;
+    
+    /* Conteneur global du marqueur géré par MapLibre */
+    .marker-container {
+      position: relative;
+      width: 30px;
+      height: 30px;
     }
-    /* ============================================================ */
-
+    
+    /* Style pour l'épingle personnalisée (goutte d'eau) */
+    .custom-marker {
+      width: 30px;
+      height: 30px;
+      border-radius: 50% 50% 50% 0;
+      background: #e74c3c;
+      /* La rotation est isolée ici */
+      transform: rotate(-45deg); 
+      position: absolute;
+      cursor: pointer;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+    
+    .custom-marker::after {
+      content: '';
+      width: 14px;
+      height: 14px;
+      margin: 8px 0 0 8px;
+      background: white;
+      position: absolute;
+      border-radius: 50%;
+    }
+    
+    .custom-marker:hover {
+      transform: rotate(-45deg) scale(1.1);
+    }
+    
+    /* Label à côté de l'épingle - Reste horizontal */
+    .marker-label {
+      position: absolute;
+      left: 40px;
+      top: 3px; /* Aligné avec le milieu de l'épingle */
+      background: white;
+      padding: 6px 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      white-space: nowrap;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      transform: none; /* Plus besoin de rotation compensatoire */
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -194,21 +233,31 @@
 
       const [lat, lng] = coords;
 
-      /* ============================================================
-         MODIFICATION : NOUVEAU MARQUEUR = POINT DE 20 PX
-         ============================================================ */
-      const pointElement = document.createElement('div');
-      pointElement.className = 'point-marker';
-      /* ============================================================ */
+      // 1. Création du conteneur principal neutre
+      const markerContainer = document.createElement('div');
+      markerContainer.className = 'marker-container';
+      
+      // 2. Création de l'épingle (qui elle seule subira la rotation)
+      const pinElement = document.createElement('div');
+      pinElement.className = 'custom-marker';
+      markerContainer.appendChild(pinElement);
+      
+      // 3. Création du label (horizontal)
+      const labelElement = document.createElement('div');
+      labelElement.className = 'marker-label';
+      labelElement.textContent = record.uai_libelle_administratif;
+      markerContainer.appendChild(labelElement);
 
+      // 4. Instanciation du marqueur MapLibre avec ancrage précis sur le bas ('bottom')
       currentMarker = new maplibregl.Marker({
-        element: pointElement,
-        anchor: 'center'
+        element: markerContainer,
+        anchor: 'bottom'
       })
         .setLngLat([lng, lat])
         .addTo(map);
 
-      pointElement.addEventListener('click', (e) => {
+      // Événement clic
+      markerContainer.addEventListener('click', (e) => {
         e.stopPropagation();
         
         map.flyTo({
@@ -218,7 +267,7 @@
         });
 
         new maplibregl.Popup({ 
-          offset: 10,
+          offset: 35, // Légèrement augmenté pour ne pas chevaucher le haut de l'épingle
           closeButton: true,
           closeOnClick: false
         })
@@ -226,7 +275,7 @@
           .setHTML(`
             <div style="font-family: Arial, sans-serif;">
               <strong style="font-size: 14px;">${record.uai_libelle_administratif}</strong><br>
-              ${record.carte_departement ? '<span style="font-size: 12px;">Département: ' + record.carte_departement + '</span>' : ''}
+              ${record.carte_departement ? '<span style="font-size: 12px; style="color: #666;">Département: ' + record.carte_departement + '</span>' : ''}
             </div>
           `)
           .addTo(map);
@@ -268,6 +317,7 @@
       }
     }
 
+    // Grist API
     grist.ready({
       columns: ['carte_departement', 'centroid', 'uai_libelle_administratif'],
       requiredAccess: 'read table'
