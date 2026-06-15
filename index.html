@@ -65,12 +65,10 @@
       border-radius: 50%;
     }
     
-    /* Changement d'état au survol */
     .marker-container:hover .custom-marker {
       transform: rotate(-45deg) scale(1.1);
     }
 
-    /* Le label apparaît uniquement au survol du conteneur */
     .marker-label {
       position: absolute;
       left: 40px;
@@ -93,7 +91,6 @@
       opacity: 1;
     }
     
-    /* Style de la popup */
     .popup-content {
       font-family: Arial, sans-serif;
       font-size: 12px;
@@ -142,6 +139,7 @@
       
       map.on('load', function() {
         mapLoaded = true;
+        console.log(" Carte IGN initialisée avec succès.");
         
         map.addSource('departement-contour', {
           'type': 'geojson',
@@ -195,8 +193,7 @@
         info.textContent = `${deptName} (${deptCode})`;
         
       } catch (error) {
-        console.warn('Erreur contour IGN ignorée pour ne pas bloquer l\'affichage:', error);
-        // On nettoie le contour précédent en cas d'échec pour éviter les incohérences visuelles
+        console.warn('Erreur contour IGN:', error.message);
         if (map.getSource('departement-contour')) {
           map.getSource('departement-contour').setData({ 'type': 'FeatureCollection', 'features': [] });
         }
@@ -230,14 +227,49 @@
     function addMarker(record, mappings) {
       clearMarker();
       
-      const centroidVal = record[mappings.centroid];
+      let centroidVal = record[mappings.centroid];
       const mainLabelVal = record[mappings.mainLabel];
       
-      if (!centroidVal || !mainLabelVal) return;
+      console.log("🔍 Données reçues pour le marqueur -> Libellé:", mainLabelVal, "| Coordonnées brutes:", centroidVal);
 
-      const coords = centroidVal.split(',').map(c => parseFloat(c.trim()));
-      if (coords.length !== 2 || isNaN(coords[0]) || isNaN(coords[1])) return;
-      const [lat, lng] = coords;
+      if (!centroidVal || !mainLabelVal) {
+        console.error("❌ Annulation : Le libellé ou les coordonnées de Grist sont vides.");
+        return;
+      }
+
+      // Si Grist renvoie un objet/tableau (ex: format Position natif), on extrait le texte
+      if (typeof centroidVal === 'object') {
+        if (Array.isArray(centroidVal)) {
+          centroidVal = centroidVal.join(',');
+        } else if (centroidVal.long && centroidVal.lat) {
+          centroidVal = `${centroidVal.lat},${centroidVal.long}`;
+        } else {
+          centroidVal = JSON.stringify(centroidVal);
+        }
+      }
+
+      // Découpage intelligent : accepte les virgules, points-virgules ou espaces comme séparateurs
+      const parts = String(centroidVal).split(/[\s,;]+/).filter(p => p.trim() !== "");
+      const coords = parts.map(c => parseFloat(c.trim()));
+      
+      if (coords.length < 2 || isNaN(coords[0]) || isNaN(coords[1])) {
+        console.error("❌ Échec du découpage des coordonnées. Obtenu après analyse:", coords);
+        return;
+      }
+
+      // --- AJUSTEMENT LATITUDE / LONGITUDE ---
+      // En France métropolitaine, la latitude est TOUJOURS comprise entre 41 et 52. 
+      // La longitude est comprise entre -5 et 10. Le script inverse automatiquement si nécessaire.
+      let lat, lng;
+      if (coords[0] > 40 && coords[0] < 53) {
+        lat = coords[0];
+        lng = coords[1];
+      } else {
+        lng = coords[0];
+        lat = coords[1];
+      }
+
+      console.log(`📍 Épingle validée -> Latitude finale: ${lat}, Longitude finale: ${lng}`);
 
       const markerContainer = document.createElement('div');
       markerContainer.className = 'marker-container';
@@ -255,14 +287,14 @@
         .setLngLat([lng, lat])
         .addTo(map);
 
-      // Centrage initial de la carte sur le nouveau marqueur si aucun contour n'a pu zoomer
-      map.flyTo({ center: [lng, lat], zoom: map.getZoom() < 8 ? 12 : map.getZoom(), duration: 1000 });
+      // Centrage automatique de la vue sur l'établissement
+      map.flyTo({ center: [lng, lat], zoom: 14, duration: 1200 });
 
-      // Génération de la popup au clic
+      // Fenêtre Pop-up au clic
       markerContainer.addEventListener('click', (e) => {
         e.stopPropagation();
         
-        map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
+        map.flyTo({ center: [lng, lat], zoom: 16, duration: 1000 });
 
         let popupHtml = `<div class="popup-content"><div class="popup-title">${mainLabelVal}</div>`;
         
@@ -297,7 +329,11 @@
     }
 
     async function handleRecordSelection(record) {
-      if (!record || !currentMappings) return;
+      if (!record) return;
+      if (!currentMappings) {
+        console.warn("⚠️ Mappings Grist non disponibles pour le moment.");
+        return;
+      }
       if (!mapLoaded) {
         setTimeout(() => handleRecordSelection(record), 500);
         return;
@@ -307,13 +343,10 @@
       const mainLabelVal = record[currentMappings.mainLabel];
       const deptVal = currentMappings.departement ? record[currentMappings.departement] : null;
       
-      // 1. Gestion du contour du département (Encapsulé dans un bloc indépendant)
       if (deptVal) {
         const deptCode = normalizeDeptCode(deptVal);
         if (deptCode && currentDepartement !== deptCode) {
           currentDepartement = deptCode;
-          // L'utilisation de await ici attend la fin de la fonction, mais les erreurs internes 
-          // à loadDepartementContour étant désormais capturées (try/catch), elles ne bloquent plus la suite.
           await loadDepartementContour(deptCode);
         }
       } else {
@@ -323,8 +356,7 @@
         }
       }
       
-      // 2. Gestion de l'affichage de l'épingle (S'exécute quoi qu'il arrive)
-      if (record[currentMappings.centroid] && mainLabelVal) {
+      if (mainLabelVal) {
         addMarker(record, currentMappings);
         info.textContent = mainLabelVal;
       } else {
@@ -333,7 +365,7 @@
       }
     }
 
-    // --- CONFIGURATION DYNAMIQUE GRIST ---
+    // --- CONFIGURATION GRIST ---
     grist.ready({
       requiredAccess: 'read table',
       columns: [
