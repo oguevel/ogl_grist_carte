@@ -35,49 +35,20 @@
       z-index: 1000;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-    
-    /* Conteneur global du marqueur géré par MapLibre */
-    .marker-container {
-      position: relative;
+
+    /* ============================================================
+       MODIFICATION : NOUVELLE STYLE DU MARQUEUR = POINT 20 PX
+       ============================================================ */
+    .point-marker {
       width: 20px;
       height: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    /* Point blanc de 20px avec bordure noire de 1px */
-    .custom-marker {
-      width: 20px;
-      height: 20px;
-      background-color: white;
+      background: red;
       border: 1px solid black;
       border-radius: 50%;
       cursor: pointer;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      box-sizing: border-box; /* Garantit que la bordure reste incluse dans les 20px */
-      transition: transform 0.2s;
     }
-    
-    .custom-marker:hover {
-      transform: scale(1.2);
-    }
-    
-    /* Label à côté du point - Aligné horizontalement */
-    .marker-label {
-      position: absolute;
-      left: 28px; /* Décalé de manière fluide par rapport au point */
-      background: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      white-space: nowrap;
-      font-family: Arial, sans-serif;
-      font-size: 13px;
-      font-weight: 600;
-      color: #333;
-      pointer-events: none;
-    }
+    /* ============================================================ */
+
   </style>
 </head>
 <body>
@@ -223,31 +194,21 @@
 
       const [lat, lng] = coords;
 
-      // 1. Création du conteneur principal neutre
-      const markerContainer = document.createElement('div');
-      markerContainer.className = 'marker-container';
-      
-      // 2. Création du point circulaire
-      const pinElement = document.createElement('div');
-      pinElement.className = 'custom-marker';
-      markerContainer.appendChild(pinElement);
-      
-      // 3. Création du label (horizontal)
-      const labelElement = document.createElement('div');
-      labelElement.className = 'marker-label';
-      labelElement.textContent = record.uai_libelle_administratif;
-      markerContainer.appendChild(labelElement);
+      /* ============================================================
+         MODIFICATION : NOUVEAU MARQUEUR = POINT DE 20 PX
+         ============================================================ */
+      const pointElement = document.createElement('div');
+      pointElement.className = 'point-marker';
+      /* ============================================================ */
 
-      // 4. Instanciation du marqueur avec ancrage au centre ('center') pour le point circulaire
       currentMarker = new maplibregl.Marker({
-        element: markerContainer,
+        element: pointElement,
         anchor: 'center'
       })
         .setLngLat([lng, lat])
         .addTo(map);
 
-      // Événement clic
-      markerContainer.addEventListener('click', (e) => {
+      pointElement.addEventListener('click', (e) => {
         e.stopPropagation();
         
         map.flyTo({
@@ -257,7 +218,7 @@
         });
 
         new maplibregl.Popup({ 
-          offset: 15, // Ajusté pour le point circulaire
+          offset: 10,
           closeButton: true,
           closeOnClick: false
         })
@@ -265,7 +226,7 @@
           .setHTML(`
             <div style="font-family: Arial, sans-serif;">
               <strong style="font-size: 14px;">${record.uai_libelle_administratif}</strong><br>
-              ${record.carte_departement ? '<span style="font-size: 12px; color: #666;">Département: ' + record.carte_departement + '</span>' : ''}
+              ${record.carte_departement ? '<span style="font-size: 12px;">Département: ' + record.carte_departement + '</span>' : ''}
             </div>
           `)
           .addTo(map);
@@ -307,7 +268,6 @@
       }
     }
 
-    // Grist API
     grist.ready({
       columns: ['carte_departement', 'centroid', 'uai_libelle_administratif'],
       requiredAccess: 'read table'
