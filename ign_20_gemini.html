@@ -2,9 +2,9 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Widget Cartographique IGN - Grist</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <title>Widget Cartographique IGN Vectoriel - Grist</title>
+    <link href="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.js"></script>
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     
     <style>
@@ -26,10 +26,10 @@
             flex-wrap: wrap;
             gap: 12px;
             align-items: center;
-            z-index: 1000; /* Assure que les menus déroulants passent au-dessus de la carte */
+            z-index: 1000;
         }
         
-        /* Style des Dropdowns Personnalisés */
+        /* Style des Dropdowns Personnalisés à cases à cocher */
         .multiselect-container {
             position: relative;
             display: inline-block;
@@ -103,7 +103,6 @@
             cursor: pointer;
         }
         
-        /* Bouton d'action principal */
         #btn-update {
             padding: 8px 18px;
             cursor: pointer;
@@ -126,16 +125,20 @@
             flex-grow: 1;
             width: 100%;
         }
-        .info-popup { 
-            font-size: 13px; 
+        
+        /* Style des popups MapLibre */
+        .maplibregl-popup-content {
+            font-size: 13px;
             line-height: 1.4;
+            font-family: Arial, sans-serif;
+            padding: 12px;
+            border-radius: 6px;
         }
     </style>
 </head>
 <body>
 
     <div id="top-bar">
-        
         <div class="multiselect-container" id="container-region">
             <span class="multiselect-label">Régions</span>
             <button class="multiselect-btn" id="btn-region" onclick="toggleDropdown('content-region')">Sélectionner...</button>
@@ -160,22 +163,83 @@
     let map;
     let mappedRecords = [];    
     let currentConfig = {};    
-    let markersLayer;          
-    let geojsonLayer;          
     let geojsonFranceData = null; 
+    let currentPopup = null;
 
-    // Initialisation de la carte Leaflet
+    // Initialisation de la carte MapLibre GL avec le style Vector Tiles IGN demandé
     function initMap() {
-        map = L.map('map').setView([46.603354, 1.888334], 6);
-        
-        // Flux Plan IGN de la Géoplateforme
-        L.tileLayer('https://data.geopf.fr/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', {
-            attribution: '&copy; <a href="https://www.ign.fr/">IGN</a>',
-            maxZoom: 18
-        }).addTo(map);
+        map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://data.geopf.fr/annexes/ressources/vectorTiles/styles/PLAN.IGN/standard.json',
+            center: [2.3522, 46.8566],
+            zoom: 5,
+            attributionControl: true
+        });
 
-        markersLayer = L.layerGroup().addTo(map);
-        geojsonLayer = L.layerGroup().addTo(map);
+        // Une fois le style de la carte chargé, on prépare les couches de données vides
+        map.on('load', () => {
+            // Source et couche pour les contours de départements
+            map.addSource('depts-source', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+            
+            map.addLayer({
+                id: 'depts-layer-fill',
+                type: 'fill',
+                source: 'depts-source',
+                paint: {
+                    // Utilise la propriété de couleur pastel générée à la volée dans le GeoJSON
+                    'fill-color': ['get', 'randomPastelColor'],
+                    'fill-opacity': 0.5
+                }
+            });
+
+            map.addLayer({
+                id: 'depts-layer-stroke',
+                type: 'line',
+                source: 'depts-source',
+                paint: {
+                    'line-color': '#64748b',
+                    'line-width': 1.5
+                }
+            });
+
+            // Source et couche pour les cercles blancs (10px diamètre, contour noir 1px)
+            map.addSource('points-source', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+
+            map.addLayer({
+                id: 'points-layer',
+                type: 'circle',
+                source: 'points-source',
+                paint: {
+                    'circle-radius': 5, // Rayon de 5px = Diamètre de 10px
+                    'circle-color': '#ffffff',
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#000000'
+                }
+            });
+
+            // Gestion du clic sur les cercles pour ouvrir le cartouche d'information (Popup)
+            map.on('click', 'points-layer', (e) => {
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const description = e.features[0].properties.popupHtml;
+
+                if (currentPopup) currentPopup.remove();
+
+                currentPopup = new maplibregl.Popup()
+                    .setLngLat(coordinates)
+                    .setHTML(description)
+                    .addTo(map);
+            });
+
+            // Changement de curseur au survol des points
+            map.on('mouseenter', 'points-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', 'points-layer', () => { map.getCanvas().style.cursor = ''; });
+        });
     }
 
     // Chargement asynchrone des contours GeoJSON des départements français
@@ -202,18 +266,15 @@
 
     // Gestion de l'ouverture / fermeture des menus déroulants
     function toggleDropdown(contentId) {
-        // Fermer tous les autres dropdowns ouverts
         const dropdowns = document.getElementsByClassName("multiselect-content");
         for (let i = 0; i < dropdowns.length; i++) {
             if (dropdowns[i].id !== contentId) {
                 dropdowns[i].classList.remove('show');
             }
         }
-        // Basculer l'état du dropdown ciblé
         document.getElementById(contentId).classList.toggle("show");
     }
 
-    // Fermer les menus déroulants si on clique n'importe où ailleurs dans la page
     window.onclick = function(event) {
         if (!event.target.matches('.multiselect-btn') && !event.target.closest('.multiselect-content')) {
             const dropdowns = document.getElementsByClassName("multiselect-content");
@@ -231,7 +292,6 @@
         updateCheckboxOptions('content-region', 'btn-region', regions, changedFilterId !== 'content-region');
         updateCheckboxOptions('content-dept', 'btn-dept', depts, changedFilterId !== 'content-dept');
 
-        // Traitement des filtres dynamiques
         const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
             const contentId = `content-custom-${colName}`;
@@ -241,22 +301,14 @@
         });
     }
 
-    // Génère le HTML des cases à cocher et met à jour l'étiquette du bouton supérieur
     function updateCheckboxOptions(contentId, btnId, values, repaint) {
         const contentDiv = document.getElementById(contentId);
         const btn = document.getElementById(btnId);
         if (!contentDiv || !btn) return;
 
-        // Étape A : Récupérer les valeurs actuellement cochées avant modification
         const checkedValues = new Set();
-        if (!repaint) {
-            const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
-            checkboxes.forEach(cb => checkedValues.add(cb.value));
-        } else {
-            // Si repaint est vrai, on conserve l'état graphique existant de l'interface
-            const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
-            checkboxes.forEach(cb => checkedValues.add(cb.value));
-        }
+        const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(cb => checkedValues.add(cb.value));
 
         if (repaint) {
             contentDiv.innerHTML = '';
@@ -269,8 +321,7 @@
                 checkbox.value = val;
                 if (checkedValues.has(String(val))) checkbox.checked = true;
                 
-                // Déclencheur sur le changement d'état
-                checkbox.addEventListener('change', (e) => onFilterChange(contentId));
+                checkbox.addEventListener('change', () => onFilterChange(contentId));
 
                 label.appendChild(checkbox);
                 label.appendChild(document.createTextNode(val));
@@ -278,7 +329,6 @@
             });
         }
 
-        // Étape B : Mettre à jour le texte du bouton d'en-tête (ex: "IdF, Bretagne" ou "3 sélectionnés")
         const dynamicChecked = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
         if (dynamicChecked.length === 0) {
             btn.textContent = "Sélectionner...";
@@ -289,11 +339,9 @@
         }
     }
 
-    // Fonction déclenchée au clic sur n'importe quelle case à cocher
     function onFilterChange(changedContentId) {
         let filtered = [...mappedRecords];
 
-        // Application successive de tous les filtres actifs
         filtered = applyFilterSelection(filtered, 'content-region', 'colRegion', false);
         filtered = applyFilterSelection(filtered, 'content-dept', 'colDept', false);
         
@@ -302,17 +350,15 @@
             filtered = applyFilterSelection(filtered, `content-custom-${colName}`, colName, true);
         });
 
-        // Met à jour les options disponibles dans les AUTRES listes déroulantes
         populateFilters(filtered, changedContentId);
     }
 
-    // Analyse l'état des cases à cocher pour filtrer le tableau de données de la carte
     function applyFilterSelection(data, contentId, keyName, isCustomField) {
         const contentDiv = document.getElementById(contentId);
         if (!contentDiv) return data;
         
         const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
-        if (checkboxes.length === 0) return data; // Rien de coché = pas de filtre restrictif
+        if (checkboxes.length === 0) return data; 
         
         const selectedValues = Array.from(checkboxes).map(cb => cb.value);
         return data.filter(r => {
@@ -321,10 +367,11 @@
         });
     }
 
-    // --- Actionneur principal : Dessin et Recentrage de la Carte ---
+    // --- Actionneur principal : Mise à jour MapLibre GL ---
     function updateMap() {
-        markersLayer.clearLayers();
-        geojsonLayer.clearLayers();
+        if (!map.getSource('points-source') || !map.getSource('depts-source')) return;
+
+        if (currentPopup) currentPopup.remove();
 
         let dataToShow = [...mappedRecords];
         dataToShow = applyFilterSelection(dataToShow, 'content-region', 'colRegion', false);
@@ -340,10 +387,12 @@
             return;
         }
 
-        const bounds = L.latLngBounds();
+        const pointFeatures = [];
         const activeDepts = new Set();
+        const bounds = new maplibregl.LngLatBounds();
+        let hasValidBounds = false;
 
-        // 1. Placement des points sous forme de cercles (Blancs, contour noir, 10px de diamètre)
+        // 1. Génération du GeoJSON pour les cercles
         dataToShow.forEach(record => {
             const latLngStr = record.colLatLng;
             if (!latLngStr) return;
@@ -355,28 +404,25 @@
             const lng = parseFloat(parts[1].trim());
 
             if (!isNaN(lat) && !isNaN(lng)) {
-                const latLng = [lat, lng];
-                bounds.extend(latLng);
+                // ATTENTION : MapLibre prend [Longitude, Latitude] à l'inverse de Leaflet
+                bounds.extend([lng, lat]);
+                hasValidBounds = true;
 
-                // Construction du cartouche d'information
-                let popupContent = `<div class="info-popup"><strong>${record.colTitle || 'Sans titre'}</strong><br><hr>`;
+                // Génération du contenu HTML du cartouche d'information
+                let popupHtml = `<div class="info-popup"><strong>${record.colTitle || 'Sans titre'}</strong><br><hr>`;
                 const displayVars = parseList(currentConfig.displayVariables);
                 displayVars.forEach(v => {
                     if (record.customFields && record.customFields[v] !== undefined) {
-                        popupContent += `<b>${v} :</b> ${record.customFields[v]}<br>`;
+                        popupHtml += `<b>${v} :</b> ${record.customFields[v]}<br>`;
                     }
                 });
-                popupContent += `</div>`;
+                popupHtml += `</div>`;
 
-                // Utilisation de circleMarker pour un design géométrique précis et épuré
-                L.circleMarker(latLng, {
-                    radius: 5,           // Un rayon de 5px donne un diamètre de 10px
-                    fillColor: '#ffffff', // Fond blanc
-                    color: '#000000',     // Contour noir
-                    weight: 1,            // Épaisseur du contour : 1px
-                    opacity: 1,
-                    fillOpacity: 1
-                }).bindPopup(popupContent).addTo(markersLayer);
+                pointFeatures.push({
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [lng, lat] },
+                    properties: { popupHtml: popupHtml }
+                });
 
                 if (record.colDept) {
                     activeDepts.add(String(record.colDept).trim());
@@ -384,31 +430,33 @@
             }
         });
 
-        // 2. Dessin des contours des départements ciblés
-        if (geojsonFranceData && activeDepts.size > 0) {
-            const filteredGeoJSON = {
-                type: "FeatureCollection",
-                features: geojsonFranceData.features.filter(f => {
-                    return activeDepts.has(f.properties.nom) || activeDepts.has(f.properties.code);
-                })
-            };
+        // Injection des points calculés dans la carte vectorielle
+        map.getSource('points-source').setData({
+            type: 'FeatureCollection',
+            features: pointFeatures
+        });
 
-            L.geoJSON(filteredGeoJSON, {
-                style: function() {
-                    return {
-                        fillColor: getPastelColor(),
-                        weight: 1.5,
-                        opacity: 1,
-                        color: '#64748b',
-                        fillOpacity: 0.5
-                    };
-                }
-            }).addTo(geojsonLayer);
+        // 2. Génération du GeoJSON filtré pour les contours de départements
+        if (geojsonFranceData && activeDepts.size > 0) {
+            const filteredFeatures = geojsonFranceData.features
+                .filter(f => activeDepts.has(f.properties.nom) || activeDepts.has(f.properties.code))
+                .map(f => {
+                    // On attribue une couleur pastel unique stockée directement dans l'entité GeoJSON
+                    f.properties.randomPastelColor = getPastelColor();
+                    return f;
+                });
+
+            map.getSource('depts-source').setData({
+                type: 'FeatureCollection',
+                features: filteredFeatures
+            });
+        } else {
+            map.getSource('depts-source').setData({ type: 'FeatureCollection', features: [] });
         }
 
-        // 3. Zoom automatique adaptatif
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [40, 40] });
+        // 3. Zoom automatique et recentrage adaptatif
+        if (hasValidBounds) {
+            map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
         }
     }
 
