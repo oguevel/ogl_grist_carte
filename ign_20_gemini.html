@@ -11,73 +11,144 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             display: flex;
             flex-direction: column;
             height: 100vh;
             overflow: hidden;
+            background-color: #f4f6f8;
         }
         #top-bar {
-            padding: 10px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #ccc;
+            padding: 12px 15px;
+            background: #ffffff;
+            border-bottom: 1px solid #e1e4e8;
             display: flex;
             flex-wrap: wrap;
-            gap: 15px;
-            align-items: flex-end;
+            gap: 12px;
+            align-items: center;
+            z-index: 1000; /* Assure que les menus déroulants passent au-dessus de la carte */
         }
-        .filter-group {
-            display: flex;
-            flex-direction: column;
+        
+        /* Style des Dropdowns Personnalisés */
+        .multiselect-container {
+            position: relative;
+            display: inline-block;
         }
-        .filter-group label {
+        .multiselect-label {
             font-size: 11px;
             font-weight: bold;
-            margin-bottom: 4px;
-            color: #333;
+            color: #4c5765;
             text-transform: uppercase;
+            margin-bottom: 3px;
+            display: block;
         }
-        select[multiple] {
-            height: 70px;
-            min-width: 160px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        #btn-update {
-            padding: 8px 15px;
+        .multiselect-btn {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            padding: 8px 30px 8px 12px;
+            font-size: 13px;
+            border-radius: 6px;
             cursor: pointer;
-            border-radius: 4px;
-            height: 35px;
-            font-weight: bold;
+            text-align: left;
+            min-width: 160px;
+            max-width: 220px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            position: relative;
+            user-select: none;
+        }
+        .multiselect-btn:after {
+            content: "▼";
+            font-size: 9px;
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+        }
+        .multiselect-btn:hover {
+            border-color: #94a3b8;
+        }
+        .multiselect-content {
+            display: none;
+            position: absolute;
+            background-color: #ffffff;
+            min-width: 200px;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 1010;
+            border-radius: 6px;
+            margin-top: 4px;
+            padding: 6px 0;
+        }
+        .multiselect-content.show {
+            display: block;
+        }
+        .multiselect-option {
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: #334155;
+            cursor: pointer;
+        }
+        .multiselect-option:hover {
+            background-color: #f1f5f9;
+        }
+        .multiselect-option input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        
+        /* Bouton d'action principal */
+        #btn-update {
+            padding: 8px 18px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
             border: none;
-            background-color: #28a745;
+            background-color: #10b981;
             color: white;
+            align-self: flex-end;
+            margin-bottom: 2px;
+            transition: background-color 0.2s;
+            height: 36px;
         }
         #btn-update:hover { 
-            background-color: #218838; 
+            background-color: #059669; 
         }
+        
         #map {
             flex-grow: 1;
             width: 100%;
         }
         .info-popup { 
             font-size: 13px; 
+            line-height: 1.4;
         }
     </style>
 </head>
 <body>
 
     <div id="top-bar">
-        <div class="filter-group">
-            <label for="filter-region">Régions</label>
-            <select id="filter-region" multiple></select>
-        </div>
-        <div class="filter-group">
-            <label for="filter-dept">Départements</label>
-            <select id="filter-dept" multiple></select>
+        
+        <div class="multiselect-container" id="container-region">
+            <span class="multiselect-label">Régions</span>
+            <button class="multiselect-btn" id="btn-region" onclick="toggleDropdown('content-region')">Sélectionner...</button>
+            <div class="multiselect-content" id="content-region"></div>
         </div>
         
-        <div id="dynamic-filters" style="display: flex; gap: 15px; flex-wrap: wrap;"></div>
+        <div class="multiselect-container" id="container-dept">
+            <span class="multiselect-label">Départements</span>
+            <button class="multiselect-btn" id="btn-dept" onclick="toggleDropdown('content-dept')">Sélectionner...</button>
+            <div class="multiselect-content" id="content-dept"></div>
+        </div>
+        
+        <div id="dynamic-filters" style="display: flex; gap: 12px; flex-wrap: wrap;"></div>
         
         <button id="btn-update">Mettre à jour la carte</button>
     </div>
@@ -87,17 +158,17 @@
 <script>
     // --- Variables globales ---
     let map;
-    let mappedRecords = [];    // Contiendra les enregistrements convertis avec les clés configurées
-    let currentConfig = {};    // Stockage de la configuration des colonnes et options
-    let markersLayer;          // Couche Leaflet pour les marqueurs (épingles)
-    let geojsonLayer;          // Couche Leaflet pour les polygones des départements
+    let mappedRecords = [];    
+    let currentConfig = {};    
+    let markersLayer;          
+    let geojsonLayer;          
     let geojsonFranceData = null; 
 
-    // Initialisation de la carte Leaflet (centrée sur la France par défaut, sans données)
+    // Initialisation de la carte Leaflet
     function initMap() {
         map = L.map('map').setView([46.603354, 1.888334], 6);
         
-        // Appel aux tuiles du Plan IGN de la Géoplateforme
+        // Flux Plan IGN de la Géoplateforme
         L.tileLayer('https://data.geopf.fr/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', {
             attribution: '&copy; <a href="https://www.ign.fr/">IGN</a>',
             maxZoom: 18
@@ -123,92 +194,145 @@
         return `hsl(${hue}, 75%, 85%)`;
     }
 
-    // Convertit une chaîne de caractères séparée par des virgules en tableau nettoyé
+    // Convertit une chaîne séparée par des virgules en tableau
     function parseList(str) {
         if (!str) return [];
         return str.split(',').map(s => s.trim()).filter(s => s.length > 0);
     }
 
-    // --- Remplissage des options dans les listes déroulantes (Filtres Croisés) ---
+    // Gestion de l'ouverture / fermeture des menus déroulants
+    function toggleDropdown(contentId) {
+        // Fermer tous les autres dropdowns ouverts
+        const dropdowns = document.getElementsByClassName("multiselect-content");
+        for (let i = 0; i < dropdowns.length; i++) {
+            if (dropdowns[i].id !== contentId) {
+                dropdowns[i].classList.remove('show');
+            }
+        }
+        // Basculer l'état du dropdown ciblé
+        document.getElementById(contentId).classList.toggle("show");
+    }
+
+    // Fermer les menus déroulants si on clique n'importe où ailleurs dans la page
+    window.onclick = function(event) {
+        if (!event.target.matches('.multiselect-btn') && !event.target.closest('.multiselect-content')) {
+            const dropdowns = document.getElementsByClassName("multiselect-content");
+            for (let i = 0; i < dropdowns.length; i++) {
+                dropdowns[i].classList.remove('show');
+            }
+        }
+    }
+
+    // --- Remplissage des options sous forme de cases à cocher ---
     function populateFilters(dataToUse = mappedRecords, changedFilterId = null) {
-        // Extraction des valeurs uniques disponibles pour les Régions et Départements
         const regions = [...new Set(dataToUse.map(r => r.colRegion))].filter(Boolean).sort();
         const depts = [...new Set(dataToUse.map(r => r.colDept))].filter(Boolean).sort();
 
-        updateSelectOptions('filter-region', regions, changedFilterId !== 'filter-region');
-        updateSelectOptions('filter-dept', depts, changedFilterId !== 'filter-dept');
+        updateCheckboxOptions('content-region', 'btn-region', regions, changedFilterId !== 'content-region');
+        updateCheckboxOptions('content-dept', 'btn-dept', depts, changedFilterId !== 'content-dept');
 
-        // Traitement des n filtres additionnels configurés par l'utilisateur
+        // Traitement des filtres dynamiques
         const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
-            const selectId = `filter-custom-${colName}`;
-            // On cherche la valeur de la colonne additionnelle stockée dans l'objet "customFields" du record
+            const contentId = `content-custom-${colName}`;
+            const btnId = `btn-custom-${colName}`;
             const vals = [...new Set(dataToUse.map(r => r.customFields ? r.customFields[colName] : null))].filter(Boolean).sort();
-            updateSelectOptions(selectId, vals, changedFilterId !== selectId);
+            updateCheckboxOptions(contentId, btnId, vals, changedFilterId !== contentId);
         });
     }
 
-    // Met à jour le DOM d'un élément select sans perdre la sélection utilisateur active
-    function updateSelectOptions(selectId, values, repaint) {
-        const select = document.getElementById(selectId);
-        if (!select || !repaint) return;
+    // Génère le HTML des cases à cocher et met à jour l'étiquette du bouton supérieur
+    function updateCheckboxOptions(contentId, btnId, values, repaint) {
+        const contentDiv = document.getElementById(contentId);
+        const btn = document.getElementById(btnId);
+        if (!contentDiv || !btn) return;
 
-        const selectedValues = Array.from(select.selectedOptions).map(opt => opt.value);
-        select.innerHTML = '';
-        
-        values.forEach(val => {
-            const opt = document.createElement('option');
-            opt.value = val;
-            opt.textContent = val;
-            if (selectedValues.includes(String(val))) opt.selected = true;
-            select.appendChild(opt);
-        });
+        // Étape A : Récupérer les valeurs actuellement cochées avant modification
+        const checkedValues = new Set();
+        if (!repaint) {
+            const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
+            checkboxes.forEach(cb => checkedValues.add(cb.value));
+        } else {
+            // Si repaint est vrai, on conserve l'état graphique existant de l'interface
+            const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
+            checkboxes.forEach(cb => checkedValues.add(cb.value));
+        }
+
+        if (repaint) {
+            contentDiv.innerHTML = '';
+            values.forEach(val => {
+                const label = document.createElement('label');
+                label.className = 'multiselect-option';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = val;
+                if (checkedValues.has(String(val))) checkbox.checked = true;
+                
+                // Déclencheur sur le changement d'état
+                checkbox.addEventListener('change', (e) => onFilterChange(contentId));
+
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(val));
+                contentDiv.appendChild(label);
+            });
+        }
+
+        // Étape B : Mettre à jour le texte du bouton d'en-tête (ex: "IdF, Bretagne" ou "3 sélectionnés")
+        const dynamicChecked = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
+        if (dynamicChecked.length === 0) {
+            btn.textContent = "Sélectionner...";
+        } else if (dynamicChecked.length <= 2) {
+            btn.textContent = Array.from(dynamicChecked).map(cb => cb.value).join(', ');
+        } else {
+            btn.textContent = `${dynamicChecked.length} sélectionnés`;
+        }
     }
 
-    // Déclenché dès qu'un utilisateur change un choix dans l'un des filtres multi-sélections
-    function onFilterChange(e) {
+    // Fonction déclenchée au clic sur n'importe quelle case à cocher
+    function onFilterChange(changedContentId) {
         let filtered = [...mappedRecords];
 
-        // Application en cascade de l'ensemble des filtres
-        filtered = applyFilterSelection(filtered, 'filter-region', 'colRegion', false);
-        filtered = applyFilterSelection(filtered, 'filter-dept', 'colDept', false);
+        // Application successive de tous les filtres actifs
+        filtered = applyFilterSelection(filtered, 'content-region', 'colRegion', false);
+        filtered = applyFilterSelection(filtered, 'content-dept', 'colDept', false);
         
         const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
-            filtered = applyFilterSelection(filtered, `filter-custom-${colName}`, colName, true);
+            filtered = applyFilterSelection(filtered, `content-custom-${colName}`, colName, true);
         });
 
-        // Met à jour dynamiquement les options restantes des autres filtres
-        populateFilters(filtered, e.target.id);
+        // Met à jour les options disponibles dans les AUTRES listes déroulantes
+        populateFilters(filtered, changedContentId);
     }
 
-    // Filtre le tableau de données selon les éléments sélectionnés dans le composant HTML
-    function applyFilterSelection(data, selectId, keyName, isCustomField) {
-        const select = document.getElementById(selectId);
-        if (!select) return data;
-        const selected = Array.from(select.selectedOptions).map(opt => opt.value);
-        if (selected.length === 0) return data; // Pas de sélection = pas de restriction appliquée
+    // Analyse l'état des cases à cocher pour filtrer le tableau de données de la carte
+    function applyFilterSelection(data, contentId, keyName, isCustomField) {
+        const contentDiv = document.getElementById(contentId);
+        if (!contentDiv) return data;
         
+        const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]:checked');
+        if (checkboxes.length === 0) return data; // Rien de coché = pas de filtre restrictif
+        
+        const selectedValues = Array.from(checkboxes).map(cb => cb.value);
         return data.filter(r => {
             const valueToCompare = isCustomField ? (r.customFields ? r.customFields[keyName] : null) : r[keyName];
-            return selected.includes(String(valueToCompare));
+            return selectedValues.includes(String(valueToCompare));
         });
     }
 
     // --- Actionneur principal : Dessin et Recentrage de la Carte ---
     function updateMap() {
-        // Nettoyage complet des anciennes données visuelles
         markersLayer.clearLayers();
         geojsonLayer.clearLayers();
 
-        // Récupération et filtrage final des données à afficher
         let dataToShow = [...mappedRecords];
-        dataToShow = applyFilterSelection(dataToShow, 'filter-region', 'colRegion', false);
-        dataToShow = applyFilterSelection(dataToShow, 'filter-dept', 'colDept', false);
+        dataToShow = applyFilterSelection(dataToShow, 'content-region', 'colRegion', false);
+        dataToShow = applyFilterSelection(dataToShow, 'content-dept', 'colDept', false);
         
         const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
-            dataToShow = applyFilterSelection(dataToShow, `filter-custom-${colName}`, colName, true);
+            dataToShow = applyFilterSelection(dataToShow, `content-custom-${colName}`, colName, true);
         });
 
         if (dataToShow.length === 0) {
@@ -219,7 +343,7 @@
         const bounds = L.latLngBounds();
         const activeDepts = new Set();
 
-        // 1. Placement des épingles (Marqueurs)
+        // 1. Placement des points sous forme de cercles (Blancs, contour noir, 10px de diamètre)
         dataToShow.forEach(record => {
             const latLngStr = record.colLatLng;
             if (!latLngStr) return;
@@ -234,7 +358,7 @@
                 const latLng = [lat, lng];
                 bounds.extend(latLng);
 
-                // Construction dynamique du cartouche d'information
+                // Construction du cartouche d'information
                 let popupContent = `<div class="info-popup"><strong>${record.colTitle || 'Sans titre'}</strong><br><hr>`;
                 const displayVars = parseList(currentConfig.displayVariables);
                 displayVars.forEach(v => {
@@ -244,16 +368,23 @@
                 });
                 popupContent += `</div>`;
 
-                L.marker(latLng).bindPopup(popupContent).addTo(markersLayer);
+                // Utilisation de circleMarker pour un design géométrique précis et épuré
+                L.circleMarker(latLng, {
+                    radius: 5,           // Un rayon de 5px donne un diamètre de 10px
+                    fillColor: '#ffffff', // Fond blanc
+                    color: '#000000',     // Contour noir
+                    weight: 1,            // Épaisseur du contour : 1px
+                    opacity: 1,
+                    fillOpacity: 1
+                }).bindPopup(popupContent).addTo(markersLayer);
 
-                // Collecte des départements visibles pour dessiner les contours
                 if (record.colDept) {
                     activeDepts.add(String(record.colDept).trim());
                 }
             }
         });
 
-        // 2. Dessin des polygones de contours des départements ciblés
+        // 2. Dessin des contours des départements ciblés
         if (geojsonFranceData && activeDepts.size > 0) {
             const filteredGeoJSON = {
                 type: "FeatureCollection",
@@ -268,44 +399,54 @@
                         fillColor: getPastelColor(),
                         weight: 1.5,
                         opacity: 1,
-                        color: '#555',
-                        fillOpacity: 0.55
+                        color: '#64748b',
+                        fillOpacity: 0.5
                     };
                 }
             }).addTo(geojsonLayer);
         }
 
-        // 3. Zoom automatique et recentrage de la carte sur l'emprise des marqueurs
+        // 3. Zoom automatique adaptatif
         if (bounds.isValid()) {
             map.fitBounds(bounds, { padding: [40, 40] });
         }
     }
 
-    // --- Génération dynamique de l'interface pour les N filtres supplémentaires ---
+    // --- Génération de l'interface pour les N filtres supplémentaires ---
     function setupDynamicFilterDOM() {
         const container = document.getElementById('dynamic-filters');
         container.innerHTML = '';
         const customFilterNames = parseList(currentConfig.filterVariables);
 
         customFilterNames.forEach(colName => {
-            const group = document.createElement('div');
-            group.className = 'filter-group';
+            const containerDiv = document.createElement('div');
+            containerDiv.className = 'multiselect-container';
+            containerDiv.id = `container-custom-${colName}`;
             
-            const label = document.createElement('label');
+            const label = document.createElement('span');
+            label.className = 'multiselect-label';
             label.textContent = colName;
             
-            const select = document.createElement('select');
-            select.id = `filter-custom-${colName}`;
-            select.multiple = true;
-            select.addEventListener('change', onFilterChange);
+            const btn = document.createElement('button');
+            btn.className = 'multiselect-btn';
+            btn.id = `btn-custom-${colName}`;
+            btn.textContent = 'Sélectionner...';
+            
+            const contentId = `content-custom-${colName}`;
+            btn.addEventListener('click', () => toggleDropdown(contentId));
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'multiselect-content';
+            contentDiv.id = contentId;
 
-            group.appendChild(label);
-            group.appendChild(select);
-            container.appendChild(group);
+            containerDiv.appendChild(label);
+            containerDiv.appendChild(btn);
+            containerDiv.appendChild(contentDiv);
+            container.appendChild(containerDiv);
         });
     }
 
-    // --- Configuration de l'API de section personnalisée Grist ---
+    // --- Couplage avec Grist API ---
     grist.ready({
         requiredAccess: 'read table',
         columns: [
@@ -320,16 +461,14 @@
         }
     });
 
-    // Réception et traitement sécurisé des enregistrements Grist
     grist.onRecords((records, mappings) => {
-        if (!mappings) return; // En attente du mapping complet initial
+        if (!mappings) return; 
 
         currentConfig = grist.getOptions() || {};
         
         const customFilterNames = parseList(currentConfig.filterVariables);
         const displayVars = parseList(currentConfig.displayVariables);
 
-        // Reconstruction saine du tableau d'objets sans passer par la fonction défaillante mapRecords
         mappedRecords = records.map(rec => {
             const obj = {
                 colLatLng: rec[mappings.colLatLng] || null,
@@ -338,27 +477,18 @@
                 colDept: rec[mappings.colDept] || null,
                 customFields: {}
             };
-            
-            // Extraction dynamique des colonnes variables demandées par l'utilisateur
             customFilterNames.forEach(col => { obj.customFields[col] = rec[col] || null; });
             displayVars.forEach(col => { obj.customFields[col] = rec[col] || null; });
-            
             return obj;
         });
 
-        // Regénération de l'affichage de l'interface
         setupDynamicFilterDOM();
-        populateFilters();
+        populateFilters(mappedRecords, null);
     });
 
-    // Initialisation au cycle de vie de la page de l'iframe
     window.addEventListener('DOMContentLoaded', async () => {
         initMap();
         await loadDeptGeoJSON();
-
-        // Enregistrement des écouteurs d'événements de base
-        document.getElementById('filter-region').addEventListener('change', onFilterChange);
-        document.getElementById('filter-dept').addEventListener('change', onFilterChange);
         document.getElementById('btn-update').addEventListener('click', updateMap);
     });
 </script>
