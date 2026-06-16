@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Widget Cartographique IGN & Filtres Avancés</title>
+    <title>Widget Cartographique IGN - Grist</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
@@ -25,7 +25,6 @@
             flex-wrap: wrap;
             gap: 15px;
             align-items: flex-end;
-            position: relative;
         }
         .filter-group {
             display: flex;
@@ -44,53 +43,26 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
-        .btn {
+        #btn-update {
             padding: 8px 15px;
             cursor: pointer;
             border-radius: 4px;
             height: 35px;
             font-weight: bold;
             border: none;
-        }
-        #btn-update {
             background-color: #28a745;
             color: white;
         }
-        #btn-update:hover { background-color: #218838; }
-        #btn-config {
-            background-color: #6c757d;
-            color: white;
+        #btn-update:hover { 
+            background-color: #218838; 
         }
         #map {
             flex-grow: 1;
             width: 100%;
         }
-        /* Panneau de configuration intégré */
-        #config-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background: #ffffff;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-            z-index: 2000;
-            padding: 15px;
-            box-sizing: border-box;
-            display: none;
-            flex-wrap: wrap;
-            gap: 10px;
+        .info-popup { 
+            font-size: 13px; 
         }
-        .config-field {
-            display: flex;
-            flex-direction: column;
-            width: calc(33% - 10px);
-            min-width: 200px;
-        }
-        .config-field label { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
-        .config-field input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
-        .config-full { width: 100%; display: flex; flex-direction: column; }
-        .config-full input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
-        .info-popup { font-size: 13px; }
     </style>
 </head>
 <body>
@@ -107,57 +79,25 @@
         
         <div id="dynamic-filters" style="display: flex; gap: 15px; flex-wrap: wrap;"></div>
         
-        <button id="btn-update" class="btn">Mettre à jour la carte</button>
-        <button id="btn-config" class="btn">⚙️ Configurer</button>
-
-        <div id="config-panel">
-            <div class="config-field">
-                <label>Nom de la Colonne Lat,Lng :</label>
-                <input type="text" id="cfg-latlng" placeholder="ex: Coordonnées">
-            </div>
-            <div class="config-field">
-                <label>Nom de la Colonne Titre :</label>
-                <input type="text" id="cfg-title" placeholder="ex: Nom Etablissement">
-            </div>
-            <div class="config-field">
-                <label>Nom de la Colonne Région :</label>
-                <input type="text" id="cfg-region" placeholder="ex: Region">
-            </div>
-            <div class="config-field">
-                <label>Nom de la Colonne Département :</label>
-                <input type="text" id="cfg-dept" placeholder="ex: Departement">
-            </div>
-            <div class="config-full">
-                <label>Colonnes à afficher dans le Cartouche (séparées par des virgules) :</label>
-                <input type="text" id="cfg-display" placeholder="ex: Adresse, Téléphone, Effectifs">
-            </div>
-            <div class="config-full">
-                <label>Colonnes à utiliser comme Filtres Additionnels (séparées par des virgules) :</label>
-                <input type="text" id="cfg-filters" placeholder="ex: Statut, Type, Secteur">
-            </div>
-            <div style="width: 100%; margin-top: 10px;">
-                <button id="btn-save-config" class="btn" style="background-color: #007bff; color: white;">Enregistrer la Configuration</button>
-                <button id="btn-close-config" class="btn" style="background-color: #dc3545; color: white;">Fermer</button>
-            </div>
-        </div>
+        <button id="btn-update">Mettre à jour la carte</button>
     </div>
 
     <div id="map"></div>
 
 <script>
-    // --- Initialisation des variables globales ---
+    // --- Variables globales ---
     let map;
-    let rawRecords = [];       // Stocke les enregistrements bruts envoyés par Grist
-    let config = {};           // Stocke les paramètres du widget
-    let markersLayer;          // Groupe Leaflet pour les épingles
-    let geojsonLayer;          // Groupe Leaflet pour les contours de départements
+    let mappedRecords = [];    // Contiendra les enregistrements convertis avec les clés configurées
+    let currentConfig = {};    // Stockage de la configuration des colonnes et options
+    let markersLayer;          // Couche Leaflet pour les marqueurs (épingles)
+    let geojsonLayer;          // Couche Leaflet pour les polygones des départements
     let geojsonFranceData = null; 
 
-    // Initialisation de la carte Leaflet centrée sur la France au démarrage
+    // Initialisation de la carte Leaflet (centrée sur la France par défaut, sans données)
     function initMap() {
         map = L.map('map').setView([46.603354, 1.888334], 6);
         
-        // Flux Plan IGN de la Géoplateforme
+        // Appel aux tuiles du Plan IGN de la Géoplateforme
         L.tileLayer('https://data.geopf.fr/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', {
             attribution: '&copy; <a href="https://www.ign.fr/">IGN</a>',
             maxZoom: 18
@@ -167,48 +107,48 @@
         geojsonLayer = L.layerGroup().addTo(map);
     }
 
-    // Chargement des contours GeoJSON des départements français
+    // Chargement asynchrone des contours GeoJSON des départements français
     async function loadDeptGeoJSON() {
         try {
             const response = await fetch('https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements.geojson');
             geojsonFranceData = await response.json();
         } catch (err) {
-            console.error("Erreur de chargement GeoJSON :", err);
+            console.error("Erreur lors du chargement des contours de départements :", err);
         }
     }
 
-    // Générateur de couleurs pastel
+    // Générateur de couleurs de fond pastel aléatoires pour les départements
     function getPastelColor() {
         const hue = Math.floor(Math.random() * 360);
         return `hsl(${hue}, 75%, 85%)`;
     }
 
-    // Extraire proprement une liste depuis les inputs de texte séparés par des virgules
+    // Convertit une chaîne de caractères séparée par des virgules en tableau nettoyé
     function parseList(str) {
         if (!str) return [];
         return str.split(',').map(s => s.trim()).filter(s => s.length > 0);
     }
 
-    // --- Génération dynamique des listes d'options des filtres (Filtres Croisés) ---
-    function populateFilters(dataToUse = rawRecords, changedFilterId = null) {
-        if (!config.colRegion || !config.colDept) return;
-
-        // Extraction des valeurs uniques basées sur les vrais noms de colonnes stockés dans config
-        const regions = [...new Set(dataToUse.map(r => r[config.colRegion]))].filter(Boolean).sort();
-        const depts = [...new Set(dataToUse.map(r => r[config.colDept]))].filter(Boolean).sort();
+    // --- Remplissage des options dans les listes déroulantes (Filtres Croisés) ---
+    function populateFilters(dataToUse = mappedRecords, changedFilterId = null) {
+        // Extraction des valeurs uniques disponibles pour les Régions et Départements
+        const regions = [...new Set(dataToUse.map(r => r.colRegion))].filter(Boolean).sort();
+        const depts = [...new Set(dataToUse.map(r => r.colDept))].filter(Boolean).sort();
 
         updateSelectOptions('filter-region', regions, changedFilterId !== 'filter-region');
         updateSelectOptions('filter-dept', depts, changedFilterId !== 'filter-dept');
 
-        // Alimentation des filtres variables créés par l'utilisateur
-        const customFilterNames = parseList(config.filterVariables);
+        // Traitement des n filtres additionnels configurés par l'utilisateur
+        const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
             const selectId = `filter-custom-${colName}`;
-            const vals = [...new Set(dataToUse.map(r => r[colName]))].filter(Boolean).sort();
+            // On cherche la valeur de la colonne additionnelle stockée dans l'objet "customFields" du record
+            const vals = [...new Set(dataToUse.map(r => r.customFields ? r.customFields[colName] : null))].filter(Boolean).sort();
             updateSelectOptions(selectId, vals, changedFilterId !== selectId);
         });
     }
 
+    // Met à jour le DOM d'un élément select sans perdre la sélection utilisateur active
     function updateSelectOptions(selectId, values, repaint) {
         const select = document.getElementById(selectId);
         if (!select || !repaint) return;
@@ -225,56 +165,63 @@
         });
     }
 
-    // Déclenché à chaque modification de sélection de filtre
+    // Déclenché dès qu'un utilisateur change un choix dans l'un des filtres multi-sélections
     function onFilterChange(e) {
-        let filtered = [...rawRecords];
+        let filtered = [...mappedRecords];
 
-        // Application en cascade de tous les filtres
-        filtered = applyFilterSelection(filtered, 'filter-region', config.colRegion);
-        filtered = applyFilterSelection(filtered, 'filter-dept', config.colDept);
+        // Application en cascade de l'ensemble des filtres
+        filtered = applyFilterSelection(filtered, 'filter-region', 'colRegion', false);
+        filtered = applyFilterSelection(filtered, 'filter-dept', 'colDept', false);
         
-        const customFilterNames = parseList(config.filterVariables);
+        const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
-            filtered = applyFilterSelection(filtered, `filter-custom-${colName}`, colName);
+            filtered = applyFilterSelection(filtered, `filter-custom-${colName}`, colName, true);
         });
 
-        // Recalculer les choix disponibles dans les autres menus
+        // Met à jour dynamiquement les options restantes des autres filtres
         populateFilters(filtered, e.target.id);
     }
 
-    function applyFilterSelection(data, selectId, colName) {
+    // Filtre le tableau de données selon les éléments sélectionnés dans le composant HTML
+    function applyFilterSelection(data, selectId, keyName, isCustomField) {
         const select = document.getElementById(selectId);
         if (!select) return data;
         const selected = Array.from(select.selectedOptions).map(opt => opt.value);
-        if (selected.length === 0) return data; 
-        return data.filter(r => selected.includes(String(r[colName])));
+        if (selected.length === 0) return data; // Pas de sélection = pas de restriction appliquée
+        
+        return data.filter(r => {
+            const valueToCompare = isCustomField ? (r.customFields ? r.customFields[keyName] : null) : r[keyName];
+            return selected.includes(String(valueToCompare));
+        });
     }
 
-    // --- Actionneur de mise à jour de la carte ---
+    // --- Actionneur principal : Dessin et Recentrage de la Carte ---
     function updateMap() {
+        // Nettoyage complet des anciennes données visuelles
         markersLayer.clearLayers();
         geojsonLayer.clearLayers();
 
-        let dataToShow = [...rawRecords];
-        dataToShow = applyFilterSelection(dataToShow, 'filter-region', config.colRegion);
-        dataToShow = applyFilterSelection(dataToShow, 'filter-dept', config.colDept);
+        // Récupération et filtrage final des données à afficher
+        let dataToShow = [...mappedRecords];
+        dataToShow = applyFilterSelection(dataToShow, 'filter-region', 'colRegion', false);
+        dataToShow = applyFilterSelection(dataToShow, 'filter-dept', 'colDept', false);
         
-        const customFilterNames = parseList(config.filterVariables);
+        const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
-            dataToShow = applyFilterSelection(dataToShow, `filter-custom-${colName}`, colName);
+            dataToShow = applyFilterSelection(dataToShow, `filter-custom-${colName}`, colName, true);
         });
 
         if (dataToShow.length === 0) {
-            alert("Aucune donnée ne correspond aux filtres sélectionnés.");
+            alert("Aucune donnée ne correspond aux critères sélectionnés.");
             return;
         }
 
         const bounds = L.latLngBounds();
         const activeDepts = new Set();
 
-        // 1. Dessiner les épingles
+        // 1. Placement des épingles (Marqueurs)
         dataToShow.forEach(record => {
-            const latLngStr = record[config.colLatLng];
+            const latLngStr = record.colLatLng;
             if (!latLngStr) return;
 
             const parts = latLngStr.split(',');
@@ -287,25 +234,26 @@
                 const latLng = [lat, lng];
                 bounds.extend(latLng);
 
-                // Fenêtre d'information (Cartouche)
-                let popupContent = `<div class="info-popup"><strong>${record[config.colTitle] || 'Sans titre'}</strong><br><hr>`;
-                const displayVars = parseList(config.displayVariables);
+                // Construction dynamique du cartouche d'information
+                let popupContent = `<div class="info-popup"><strong>${record.colTitle || 'Sans titre'}</strong><br><hr>`;
+                const displayVars = parseList(currentConfig.displayVariables);
                 displayVars.forEach(v => {
-                    if(record[v] !== undefined) {
-                        popupContent += `<b>${v} :</b> ${record[v]}<br>`;
+                    if (record.customFields && record.customFields[v] !== undefined) {
+                        popupContent += `<b>${v} :</b> ${record.customFields[v]}<br>`;
                     }
                 });
                 popupContent += `</div>`;
 
                 L.marker(latLng).bindPopup(popupContent).addTo(markersLayer);
 
-                if (record[config.colDept]) {
-                    activeDepts.add(String(record[config.colDept]).trim());
+                // Collecte des départements visibles pour dessiner les contours
+                if (record.colDept) {
+                    activeDepts.add(String(record.colDept).trim());
                 }
             }
         });
 
-        // 2. Dessiner les polygones des départements
+        // 2. Dessin des polygones de contours des départements ciblés
         if (geojsonFranceData && activeDepts.size > 0) {
             const filteredGeoJSON = {
                 type: "FeatureCollection",
@@ -320,24 +268,24 @@
                         fillColor: getPastelColor(),
                         weight: 1.5,
                         opacity: 1,
-                        color: '#444',
-                        fillOpacity: 0.6
+                        color: '#555',
+                        fillOpacity: 0.55
                     };
                 }
             }).addTo(geojsonLayer);
         }
 
-        // 3. Zoom / Recentrage adaptatif
+        // 3. Zoom automatique et recentrage de la carte sur l'emprise des marqueurs
         if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [30, 30] });
+            map.fitBounds(bounds, { padding: [40, 40] });
         }
     }
 
-    // --- Génération de l'interface pour les filtres variables de l'utilisateur ---
+    // --- Génération dynamique de l'interface pour les N filtres supplémentaires ---
     function setupDynamicFilterDOM() {
         const container = document.getElementById('dynamic-filters');
         container.innerHTML = '';
-        const customFilterNames = parseList(config.filterVariables);
+        const customFilterNames = parseList(currentConfig.filterVariables);
 
         customFilterNames.forEach(colName => {
             const group = document.createElement('div');
@@ -357,65 +305,58 @@
         });
     }
 
-    // --- Logique d'interaction avec Grist API ---
-    grist.ready({ requiredAccess: 'read table' });
-
-    grist.onRecords((records) => {
-        rawRecords = records; // Conserver les records natifs avec leurs vrais en-têtes
-        
-        // Charger les options sauvegardées
-        config = grist.getOptions() || {};
-
-        if (config.colLatLng) {
-            setupDynamicFilterDOM();
-            populateFilters();
-        } else {
-            // Si aucune config, on force l'affichage du panneau de réglages au premier démarrage
-            document.getElementById('config-panel').style.display = 'flex';
+    // --- Configuration de l'API de section personnalisée Grist ---
+    grist.ready({
+        requiredAccess: 'read table',
+        columns: [
+            { name: "colLatLng", title: "Latitude, Longitude", type: "Text" },
+            { name: "colTitle", title: "Titre Épingle", type: "Text" },
+            { name: "colRegion", title: "Colonne Région", type: "Text" },
+            { name: "colDept", title: "Colonne Département", type: "Text" }
+        ],
+        options: {
+            displayVariables: { type: "String", title: "Variables cartouche (séparées par des ,)", optional: true },
+            filterVariables: { type: "String", title: "Filtres additionnels (séparés par des ,)", optional: true }
         }
     });
 
-    // --- Gestionnaires d'événements de l'interface de configuration ---
-    document.getElementById('btn-config').addEventListener('click', () => {
-        // Pré-remplir les inputs avec la configuration existante
-        document.getElementById('cfg-latlng').value = config.colLatLng || '';
-        document.getElementById('cfg-title').value = config.colTitle || '';
-        document.getElementById('cfg-region').value = config.colRegion || '';
-        document.getElementById('cfg-dept').value = config.colDept || '';
-        document.getElementById('cfg-display').value = config.displayVariables || '';
-        document.getElementById('cfg-filters').value = config.filterVariables || '';
+    // Réception et traitement sécurisé des enregistrements Grist
+    grist.onRecords((records, mappings) => {
+        if (!mappings) return; // En attente du mapping complet initial
+
+        currentConfig = grist.getOptions() || {};
         
-        document.getElementById('config-panel').style.display = 'flex';
-    });
+        const customFilterNames = parseList(currentConfig.filterVariables);
+        const displayVars = parseList(currentConfig.displayVariables);
 
-    document.getElementById('btn-close-config').addEventListener('click', () => {
-        document.getElementById('config-panel').style.display = 'none';
-    });
+        // Reconstruction saine du tableau d'objets sans passer par la fonction défaillante mapRecords
+        mappedRecords = records.map(rec => {
+            const obj = {
+                colLatLng: rec[mappings.colLatLng] || null,
+                colTitle: rec[mappings.colTitle] || null,
+                colRegion: rec[mappings.colRegion] || null,
+                colDept: rec[mappings.colDept] || null,
+                customFields: {}
+            };
+            
+            // Extraction dynamique des colonnes variables demandées par l'utilisateur
+            customFilterNames.forEach(col => { obj.customFields[col] = rec[col] || null; });
+            displayVars.forEach(col => { obj.customFields[col] = rec[col] || null; });
+            
+            return obj;
+        });
 
-    document.getElementById('btn-save-config').addEventListener('click', async () => {
-        const newConfig = {
-            colLatLng: document.getElementById('cfg-latlng').value.trim(),
-            colTitle: document.getElementById('cfg-title').value.trim(),
-            colRegion: document.getElementById('cfg-region').value.trim(),
-            colDept: document.getElementById('cfg-dept').value.trim(),
-            displayVariables: document.getElementById('cfg-display').value.trim(),
-            filterVariables: document.getElementById('cfg-filters').value.trim()
-        };
-
-        // Sauvegarde définitive des paramètres dans le document Grist
-        await grist.setOptions(newConfig);
-        config = newConfig;
-        
-        document.getElementById('config-panel').style.display = 'none';
+        // Regénération de l'affichage de l'interface
         setupDynamicFilterDOM();
         populateFilters();
     });
 
-    // Initialisation globale au démarrage de la page
+    // Initialisation au cycle de vie de la page de l'iframe
     window.addEventListener('DOMContentLoaded', async () => {
         initMap();
         await loadDeptGeoJSON();
 
+        // Enregistrement des écouteurs d'événements de base
         document.getElementById('filter-region').addEventListener('change', onFilterChange);
         document.getElementById('filter-dept').addEventListener('change', onFilterChange);
         document.getElementById('btn-update').addEventListener('click', updateMap);
