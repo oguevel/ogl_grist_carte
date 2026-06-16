@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Carte IGN - Widget GRIST</title>
+  <title>Carte - Widget GRIST</title>
 
   <!-- ======================================================
-       DÉPENDANCES EXTERNES
-       - Leaflet : rendu cartographique
+       DÉPENDANCES
+       - Leaflet 1.9.4 : rendu cartographique
        - GRIST Plugin API : communication avec GRIST
   ====================================================== -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -16,14 +16,9 @@
 
   <style>
     /* ======================================================
-       RESET ET BASE
+       BASE
     ====================================================== */
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Arial, sans-serif;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
 
     body {
       display: flex;
@@ -34,107 +29,100 @@
     }
 
     /* ======================================================
-       BARRE DE FILTRES EN HAUT
+       BARRE DE FILTRES
     ====================================================== */
     #filter-bar {
       display: flex;
       flex-wrap: wrap;
       align-items: flex-end;
-      gap: 10px;
-      padding: 10px 14px;
+      gap: 8px;
+      padding: 8px 12px;
       background: #ffffff;
       border-bottom: 2px solid #dde3ea;
       z-index: 1000;
-      min-height: 60px;
+      min-height: 56px;
     }
 
-    /* Chaque groupe filtre : label + select multiple */
     .filter-group {
       display: flex;
       flex-direction: column;
-      min-width: 150px;
-      max-width: 220px;
+      min-width: 130px;
+      max-width: 200px;
     }
 
     .filter-group label {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: 700;
       color: #5a6a7a;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    /* Select multiple stylisé */
     .filter-group select {
-      padding: 4px 6px;
+      padding: 3px 5px;
       border: 1px solid #c0cad6;
       border-radius: 5px;
-      font-size: 12px;
+      font-size: 11px;
       background: #f8fafc;
       color: #2d3a45;
-      height: 80px; /* Affiche ~4 options pour signifier le multi-select */
+      /* Hauteur fixe pour afficher ~4 lignes → signifie multi-sélection possible */
+      height: 72px;
       cursor: pointer;
       outline: none;
       transition: border-color 0.2s;
     }
 
-    .filter-group select:focus {
-      border-color: #4a90d9;
-      background: #fff;
-    }
+    .filter-group select:focus { border-color: #4a90d9; background: #fff; }
 
-    /* Bouton mise à jour carte */
-    #btn-update {
-      padding: 8px 18px;
-      background: linear-gradient(135deg, #4a90d9, #2c6fad);
-      color: #fff;
-      border: none;
+    /* Boutons de la barre */
+    .bar-btn {
+      padding: 7px 14px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
+      border: none;
+      white-space: nowrap;
       align-self: flex-end;
       transition: background 0.2s, transform 0.1s;
-      white-space: nowrap;
     }
+    .bar-btn:active { transform: scale(0.97); }
 
-    #btn-update:hover {
-      background: linear-gradient(135deg, #357abd, #1a5a9a);
+    #btn-update {
+      background: linear-gradient(135deg, #4a90d9, #2c6fad);
+      color: #fff;
     }
+    #btn-update:hover { background: linear-gradient(135deg, #357abd, #1a5a9a); }
 
-    #btn-update:active {
-      transform: scale(0.97);
-    }
-
-    /* Bouton reset filtres */
     #btn-reset {
-      padding: 8px 14px;
       background: #e8ecf0;
       color: #5a6a7a;
       border: 1px solid #c0cad6;
-      border-radius: 6px;
-      font-size: 12px;
-      cursor: pointer;
-      align-self: flex-end;
-      transition: background 0.2s;
-      white-space: nowrap;
     }
+    #btn-reset:hover { background: #d0d8e0; }
 
-    #btn-reset:hover {
-      background: #d0d8e0;
+    /* Bouton config : toujours visible, coin droit */
+    #btn-config {
+      background: #fff8e1;
+      color: #7a5f00;
+      border: 1px solid #ffe082;
+      margin-left: auto; /* pousse à droite */
     }
+    #btn-config:hover { background: #fff3cd; }
 
-    /* Message si aucun filtre configuré */
     #no-filter-msg {
-      font-size: 12px;
+      font-size: 11px;
       color: #8a9ab0;
       font-style: italic;
       align-self: center;
     }
 
     /* ======================================================
-       CONTENEUR CARTE
+       CARTE
     ====================================================== */
     #map-container {
       flex: 1;
@@ -142,14 +130,10 @@
       overflow: hidden;
     }
 
-    #map {
-      width: 100%;
-      height: 100%;
-    }
+    #map { width: 100%; height: 100%; }
 
     /* ======================================================
-       CARTOUCHE D'INFORMATION (popup custom)
-       Affiché quand on clique sur une épingle
+       CARTOUCHE INFO
     ====================================================== */
     #info-card {
       display: none;
@@ -160,157 +144,122 @@
       background: #ffffff;
       border-radius: 10px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.18);
-      padding: 16px 18px;
-      min-width: 220px;
-      max-width: 320px;
+      padding: 16px 18px 14px;
+      min-width: 210px;
+      max-width: 300px;
       border-left: 5px solid #4a90d9;
     }
 
     #info-card h3 {
-      font-size: 15px;
+      font-size: 14px;
       color: #1a2a3a;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       border-bottom: 1px solid #e8ecf0;
-      padding-bottom: 6px;
+      padding-bottom: 5px;
+      padding-right: 20px; /* espace pour le bouton close */
     }
 
-    #info-card .info-row {
+    .info-row {
       display: flex;
       justify-content: space-between;
-      font-size: 12px;
-      margin-bottom: 5px;
+      font-size: 11px;
+      margin-bottom: 4px;
       gap: 8px;
     }
 
-    #info-card .info-label {
+    .info-label {
       color: #7a8a9a;
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
-      font-size: 10px;
+      font-size: 9px;
       letter-spacing: 0.4px;
       flex-shrink: 0;
     }
 
-    #info-card .info-value {
-      color: #2d3a45;
-      font-weight: 500;
-      text-align: right;
-    }
+    .info-value { color: #2d3a45; font-weight: 500; text-align: right; }
 
-    /* Bouton fermeture cartouche */
     #info-card-close {
       position: absolute;
-      top: 8px;
-      right: 10px;
-      background: none;
-      border: none;
-      font-size: 16px;
-      cursor: pointer;
-      color: #8a9ab0;
+      top: 8px; right: 10px;
+      background: none; border: none;
+      font-size: 15px; cursor: pointer; color: #8a9ab0;
     }
-
-    #info-card-close:hover {
-      color: #2d3a45;
-    }
+    #info-card-close:hover { color: #2d3a45; }
 
     /* ======================================================
-       PANNEAU DE CONFIGURATION (affiché en mode Options GRIST)
+       PANNEAU DE CONFIGURATION
     ====================================================== */
     #config-panel {
-      display: none; /* Géré par GRIST en mode configuration */
+      display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.45);
+      background: rgba(0,0,0,0.5);
       z-index: 3000;
       justify-content: center;
       align-items: center;
     }
-
-    #config-panel.visible {
-      display: flex;
-    }
+    #config-panel.visible { display: flex; }
 
     #config-box {
       background: #fff;
       border-radius: 12px;
-      padding: 28px 32px;
-      width: 560px;
-      max-width: 95vw;
-      max-height: 90vh;
+      padding: 24px 28px;
+      width: 540px;
+      max-width: 96vw;
+      max-height: 88vh;
       overflow-y: auto;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.28);
     }
 
     #config-box h2 {
-      font-size: 17px;
+      font-size: 16px;
       color: #1a2a3a;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .config-section {
       margin-bottom: 18px;
     }
 
+    .config-section { margin-bottom: 16px; }
+
     .config-section h4 {
-      font-size: 12px;
+      font-size: 11px;
       color: #4a90d9;
       text-transform: uppercase;
       letter-spacing: 0.6px;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin-bottom: 7px;
       border-bottom: 1px solid #e8ecf0;
-      padding-bottom: 4px;
+      padding-bottom: 3px;
     }
 
-    .config-row {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 10px;
-    }
+    .config-row { display: flex; flex-direction: column; margin-bottom: 9px; }
 
     .config-row label {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       color: #5a6a7a;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
 
-    .config-row input,
-    .config-row select {
-      padding: 7px 10px;
+    .config-row input {
+      padding: 6px 9px;
       border: 1px solid #c0cad6;
       border-radius: 5px;
-      font-size: 13px;
+      font-size: 12px;
       color: #2d3a45;
       outline: none;
     }
+    .config-row input:focus { border-color: #4a90d9; }
 
-    .config-row input:focus {
-      border-color: #4a90d9;
-    }
+    .dynamic-list { display: flex; flex-direction: column; gap: 5px; }
 
-    /* Zone liste des colonnes dynamiques (filtres + infos) */
-    .dynamic-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .dynamic-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .dynamic-item { display: flex; align-items: center; gap: 5px; }
 
     .dynamic-item input {
       flex: 1;
-      padding: 6px 8px;
+      padding: 5px 8px;
       border: 1px solid #c0cad6;
       border-radius: 5px;
       font-size: 12px;
+      outline: none;
     }
 
     .dynamic-item button {
@@ -318,9 +267,9 @@
       border: none;
       border-radius: 4px;
       color: #c0392b;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
-      padding: 4px 8px;
+      padding: 3px 7px;
     }
 
     .btn-add {
@@ -328,130 +277,133 @@
       border: 1px dashed #4a90d9;
       border-radius: 5px;
       color: #4a90d9;
-      font-size: 12px;
+      font-size: 11px;
       cursor: pointer;
-      padding: 5px 10px;
+      padding: 4px 10px;
       margin-top: 4px;
       align-self: flex-start;
     }
-
-    .btn-add:hover {
-      background: #d0e8f8;
-    }
+    .btn-add:hover { background: #d0e8f8; }
 
     .config-buttons {
       display: flex;
       gap: 10px;
       justify-content: flex-end;
-      margin-top: 20px;
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px solid #e8ecf0;
     }
 
     .config-buttons button {
-      padding: 9px 20px;
+      padding: 8px 18px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       border: none;
     }
 
-    #btn-config-save {
-      background: linear-gradient(135deg, #4a90d9, #2c6fad);
-      color: #fff;
-    }
+    #btn-config-save { background: linear-gradient(135deg,#4a90d9,#2c6fad); color:#fff; }
+    #btn-config-cancel { background: #e8ecf0; color:#5a6a7a; }
 
-    #btn-config-cancel {
-      background: #e8ecf0;
-      color: #5a6a7a;
+    /* Info bloc dans config */
+    .config-info {
+      background: #f0f7ff;
+      border: 1px solid #bdd6f0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: #2d5a8a;
+      margin-bottom: 10px;
+      line-height: 1.5;
     }
 
     /* ======================================================
-       INDICATEUR DE CHARGEMENT
+       LOADER
     ====================================================== */
     #loader {
       display: none;
       position: absolute;
       inset: 0;
-      background: rgba(255,255,255,0.7);
+      background: rgba(255,255,255,0.72);
       z-index: 2000;
       justify-content: center;
       align-items: center;
-      font-size: 15px;
+      font-size: 14px;
       color: #4a90d9;
       font-weight: 600;
       gap: 10px;
     }
-
-    #loader.visible {
-      display: flex;
-    }
+    #loader.visible { display: flex; }
 
     .spinner {
-      width: 28px;
-      height: 28px;
+      width: 26px; height: 26px;
       border: 3px solid #c0d8f0;
       border-top-color: #4a90d9;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ======================================================
-       LÉGENDE DES DÉPARTEMENTS
+       LÉGENDE
     ====================================================== */
     .legend-control {
       background: white;
-      padding: 8px 12px;
+      padding: 7px 11px;
       border-radius: 8px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-      max-height: 200px;
+      max-height: 180px;
       overflow-y: auto;
-      font-size: 11px;
-      max-width: 180px;
+      font-size: 10px;
+      max-width: 170px;
     }
-
     .legend-control h4 {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       color: #3a4a5a;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
       text-transform: uppercase;
       letter-spacing: 0.4px;
     }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      margin-bottom: 3px;
-    }
-
+    .legend-item { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
     .legend-color {
-      width: 14px;
-      height: 14px;
+      width: 12px; height: 12px;
       border-radius: 3px;
       border: 1px solid rgba(0,0,0,0.15);
       flex-shrink: 0;
     }
 
     /* ======================================================
-       MESSAGE D'ÉTAT (aucune donnée, etc.)
+       STATUS MESSAGE
     ====================================================== */
     #status-msg {
       display: none;
       position: absolute;
-      bottom: 30px;
+      bottom: 28px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 1500;
-      background: rgba(42,54,66,0.85);
+      background: rgba(30,44,58,0.88);
       color: #fff;
-      padding: 8px 18px;
-      border-radius: 20px;
-      font-size: 12px;
+      padding: 7px 16px;
+      border-radius: 18px;
+      font-size: 11px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* ======================================================
+       BADGE DONNÉES
+    ====================================================== */
+    #data-badge {
+      font-size: 10px;
+      color: #5a8a5a;
+      background: #e8f5e8;
+      border: 1px solid #b0d8b0;
+      border-radius: 4px;
+      padding: 2px 7px;
+      align-self: center;
       white-space: nowrap;
     }
   </style>
@@ -463,89 +415,80 @@
        BARRE DE FILTRES
   ====================================================== -->
   <div id="filter-bar">
-    <!-- Les filtres seront injectés dynamiquement par JS -->
-    <span id="no-filter-msg">Configurez le widget pour afficher les filtres</span>
-    <div style="flex:1"></div>
-    <button id="btn-reset" title="Réinitialiser tous les filtres">↺ Reset</button>
-    <button id="btn-update">🗺 Mettre à jour la carte</button>
+    <span id="no-filter-msg">⚙️ Cliquez sur "Config" pour paramétrer le widget</span>
+    <!-- Les groupes de filtres sont injectés ici dynamiquement -->
+
+    <!-- Badge indiquant le nombre d'enregistrements chargés -->
+    <span id="data-badge" style="display:none"></span>
+
+    <button class="bar-btn" id="btn-reset" title="Réinitialiser tous les filtres">↺ Reset</button>
+    <button class="bar-btn" id="btn-update">🗺 Mettre à jour</button>
+    <button class="bar-btn" id="btn-config">⚙️ Config</button>
   </div>
 
   <!-- ======================================================
-       CARTE PRINCIPALE
+       CARTE
   ====================================================== -->
   <div id="map-container">
     <div id="map"></div>
 
-    <!-- Indicateur de chargement -->
-    <div id="loader">
-      <div class="spinner"></div>
-      Chargement des données…
-    </div>
+    <div id="loader"><div class="spinner"></div>Chargement…</div>
 
-    <!-- Cartouche info point sélectionné -->
     <div id="info-card">
       <button id="info-card-close" title="Fermer">✕</button>
       <h3 id="info-card-title">—</h3>
       <div id="info-card-body"></div>
     </div>
 
-    <!-- Message d'état -->
-    <div id="status-msg" id="status-msg"></div>
+    <div id="status-msg"></div>
   </div>
 
   <!-- ======================================================
-       PANNEAU DE CONFIGURATION (activé via GRIST options)
+       PANNEAU DE CONFIGURATION
   ====================================================== -->
   <div id="config-panel">
     <div id="config-box">
       <h2>⚙️ Configuration du widget Carte</h2>
+
+      <div class="config-info">
+        💡 Les noms de colonnes doivent correspondre exactement aux noms dans GRIST
+        (sensible à la casse). Les données sont lues depuis la table liée au widget.
+      </div>
 
       <!-- Colonnes de base -->
       <div class="config-section">
         <h4>Colonnes de base</h4>
 
         <div class="config-row">
-          <label>Nom de la table liée</label>
-          <input type="text" id="cfg-table" placeholder="ex: Etablissements"/>
-        </div>
-
-        <div class="config-row">
-          <label>Colonne coordonnées (format: lat,lon)</label>
+          <label>Colonne coordonnées <em>(format: latitude,longitude)</em></label>
           <input type="text" id="cfg-col-coords" placeholder="ex: coordonnees"/>
         </div>
-
         <div class="config-row">
           <label>Colonne titre de l'épingle</label>
           <input type="text" id="cfg-col-title" placeholder="ex: nom"/>
         </div>
-
         <div class="config-row">
-          <label>Colonne régions</label>
+          <label>Colonne régions <em>(pour le filtre région)</em></label>
           <input type="text" id="cfg-col-region" placeholder="ex: region"/>
         </div>
-
         <div class="config-row">
-          <label>Colonne départements</label>
+          <label>Colonne départements <em>(pour le filtre dept + dessin contours)</em></label>
           <input type="text" id="cfg-col-dept" placeholder="ex: departement"/>
         </div>
       </div>
 
-      <!-- Variables affichées dans le cartouche -->
+      <!-- Variables cartouche -->
       <div class="config-section">
-        <h4>Variables affichées dans le cartouche (0 à N)</h4>
+        <h4>Variables affichées dans le cartouche info (0 à N)</h4>
         <div class="dynamic-list" id="list-info-cols"></div>
-        <button class="btn-add" onclick="addDynamicItem('list-info-cols', 'info')">
-          + Ajouter une variable
-        </button>
+        <button class="btn-add" id="btn-add-info">+ Ajouter une variable</button>
       </div>
 
-      <!-- Variables de filtre -->
+      <!-- Variables filtre -->
       <div class="config-section">
-        <h4>Variables utilisées comme filtres (0 à N)</h4>
+        <h4>Variables supplémentaires utilisées comme filtres (0 à N)</h4>
         <div class="dynamic-list" id="list-filter-cols"></div>
-        <button class="btn-add" onclick="addDynamicItem('list-filter-cols', 'filter')">
-          + Ajouter un filtre
-        </button>
+        <button class="btn-add" id="btn-add-filter">+ Ajouter un filtre</button>
       </div>
 
       <div class="config-buttons">
@@ -555,46 +498,39 @@
     </div>
   </div>
 
+  <!-- ======================================================
+       SCRIPT PRINCIPAL
+  ====================================================== -->
   <script>
-  // ============================================================
-  //  WIDGET GRIST - CARTE IGN INTERACTIVE
-  //  
-  //  Flux général :
-  //  1. GRIST transmet les options et les données de la table
-  //  2. L'utilisateur sélectionne des valeurs dans les filtres
-  //  3. Les filtres se mettent à jour en cascade (reactiveFilters)
-  //  4. "Mettre à jour la carte" dessine les marqueurs et les
-  //     contours des départements concernés
-  //  5. Un clic sur une épingle ouvre le cartouche d'info
-  // ============================================================
+  'use strict';
 
-  // ------------------------------------------------------------
+  // ============================================================
   //  CONFIGURATION PAR DÉFAUT
-  //  Stockée dans les options GRIST (grist.setOptions / getOptions)
-  // ------------------------------------------------------------
+  //  Persistée dans grist.setOptions() / grist.getOptions()
+  //  Note : on ne stocke plus "tableId" car GRIST fournit les
+  //  données directement via onRecords() pour la table liée.
+  // ============================================================
   let config = {
-    tableId    : '',        // ID / nom de la table GRIST
-    colCoords  : '',        // colonne "lat,lon"
-    colTitle   : '',        // colonne titre épingle
-    colRegion  : '',        // colonne région
-    colDept    : '',        // colonne département
-    infoCols   : [],        // colonnes affichées dans le cartouche
-    filterCols : []         // colonnes servant de filtres
+    colCoords  : '',   // Nom de la colonne "lat,lon"
+    colTitle   : '',   // Nom de la colonne titre épingle
+    colRegion  : '',   // Nom de la colonne région
+    colDept    : '',   // Nom de la colonne département
+    infoCols   : [],   // Colonnes affichées dans le cartouche
+    filterCols : []    // Colonnes supplémentaires servant de filtres
   };
 
-  // ------------------------------------------------------------
-  //  ÉTAT DE L'APPLICATION
-  // ------------------------------------------------------------
+  // ============================================================
+  //  ÉTAT APPLICATIF
+  // ============================================================
   let allRecords      = [];   // Tous les enregistrements reçus de GRIST
-  let filteredRecords = [];   // Enregistrements après application des filtres
-  let deptGeoJSON     = null; // GeoJSON des contours des départements (chargé 1 fois)
+  let deptGeoJSON     = null; // GeoJSON contours départements (chargé une fois)
   let map             = null; // Instance Leaflet
-  let markersLayer    = null; // Couche Leaflet des marqueurs
-  let deptLayer       = null; // Couche Leaflet des départements colorés
-  let legendControl   = null; // Contrôle de légende Leaflet
+  let markersLayer    = null; // Couche marqueurs
+  let deptLayer       = null; // Couche contours départements
+  let legendControl   = null; // Contrôle légende Leaflet
+  let gristReady      = false;// Flag : GRIST API initialisée
 
-  // Palette de couleurs pastel pour les départements
-  // 20 couleurs distinctes en rotation si plus de 20 départements
+  // 20 couleurs pastel distinctes pour les départements
   const PASTEL_COLORS = [
     '#FFB3BA','#FFDFBA','#FFFFBA','#BAFFC9','#BAE1FF',
     '#E8BAFF','#FFD9BA','#BAFFEE','#FFE4BA','#D4BAFF',
@@ -602,64 +538,57 @@
     '#FFF0C9','#C9FFE5','#FFD4D4','#D4F0FF','#F0D4FF'
   ];
 
-  // Map dept_code → couleur assignée dynamiquement
+  // Mapping dept_key → couleur pastel (recalculé à chaque updateMap)
   let deptColorMap = {};
 
   // ============================================================
-  //  INITIALISATION DE LA CARTE LEAFLET
+  //  INITIALISATION LEAFLET
+  //  Fond de carte : OpenStreetMap (fiable en contexte iframe)
+  //  → Le WMTS IGN wxs.ign.fr échoue souvent derrière un proxy
+  //    d'entreprise ou en iframe sandboxée (ERR_TUNNEL_CONNECTION_FAILED)
   // ============================================================
   function initMap() {
-    // Centrage initial sur la France métropolitaine
     map = L.map('map', {
-      center: [46.5, 2.5],
-      zoom: 6,
+      center   : [46.5, 2.5],  // Centre de la France métropolitaine
+      zoom     : 6,
       zoomControl: true
     });
 
-    // ---- Fond de carte : IGN Géoportail (Plan IGN) ----
-    // On utilise le service WMTS public de l'IGN (sans clé API pour la couche plan)
-    // URL conforme aux CGU IGN pour usage non commercial / développement
-    L.tileLayer(
-      'https://wxs.ign.fr/essentiels/geoportail/wmts?' +
-      'SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
-      '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2' +
-      '&STYLE=normal&FORMAT=image/png' +
-      '&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-      {
-        attribution: '© <a href="https://www.ign.fr">IGN</a> - Géoportail',
-        minZoom: 2,
-        maxZoom: 18
-      }
-    ).addTo(map);
+    // Fond OpenStreetMap : universel, pas de clé API, pas de problème de tunnel
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom     : 19
+    }).addTo(map);
 
-    // Couches vides qui seront alimentées lors de updateMap()
-    markersLayer = L.layerGroup().addTo(map);
+    // Couches vides alimentées lors de updateMap()
     deptLayer    = L.layerGroup().addTo(map);
+    markersLayer = L.layerGroup().addTo(map); // Au-dessus des départements
 
-    // Message initial centré sur la France
-    showStatus('Sélectionnez des filtres puis cliquez sur "Mettre à jour la carte"');
+    showStatus('En attente de données GRIST…');
   }
 
   // ============================================================
-  //  CHARGEMENT DU GEOJSON DES DÉPARTEMENTS FRANÇAIS
-  //  Source : données OpenData (GeoJSON simplifié, hébergé publiquement)
-  //  On utilise le fichier des départements de france-geojson (github)
+  //  CHARGEMENT GEOJSON DÉPARTEMENTS
+  //  Source : gregoiredavid/france-geojson (MIT)
+  //  Version simplifiée → fichier léger (~400 ko)
+  //  Chargé une seule fois, mis en cache dans deptGeoJSON
   // ============================================================
   async function loadDeptGeoJSON() {
-    if (deptGeoJSON) return; // Déjà chargé, pas besoin de recharger
+    if (deptGeoJSON) return true; // Déjà en cache
 
     showLoader(true);
     try {
-      // GeoJSON des départements français (métropole + DOM)
-      // Source : gregoiredavid/france-geojson (MIT License)
       const resp = await fetch(
         'https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson'
       );
-      if (!resp.ok) throw new Error('Impossible de charger le GeoJSON des départements');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       deptGeoJSON = await resp.json();
-    } catch(e) {
-      console.error('Erreur chargement GeoJSON dept:', e);
-      showStatus('Erreur : impossible de charger les contours des départements');
+      console.log('[CarteWidget] GeoJSON départements chargé :', deptGeoJSON.features.length, 'features');
+      return true;
+    } catch(err) {
+      console.error('[CarteWidget] Erreur chargement GeoJSON:', err);
+      showStatus('⚠️ Impossible de charger les contours des départements');
+      return false;
     } finally {
       showLoader(false);
     }
@@ -667,180 +596,168 @@
 
   // ============================================================
   //  MISE À JOUR DE LA CARTE
-  //  Appelée au clic sur "Mettre à jour la carte"
+  //  Déclenchée par le clic sur "Mettre à jour"
   // ============================================================
   async function updateMap() {
-    showLoader(true);
-    hideInfoCard();
-
-    // Récupérer les enregistrements filtrés selon les selects actifs
-    filteredRecords = applyCurrentFilters();
-
-    if (filteredRecords.length === 0) {
-      showLoader(false);
-      showStatus('Aucune donnée pour les filtres sélectionnés');
-      // Vider les couches
-      markersLayer.clearLayers();
-      deptLayer.clearLayers();
+    // Vérification : des données sont-elles disponibles ?
+    if (allRecords.length === 0) {
+      showStatus('⚠️ Aucune donnée reçue de GRIST. Vérifiez la configuration.');
       return;
     }
 
-    // S'assurer que le GeoJSON des départements est chargé
+    if (!config.colCoords) {
+      showStatus('⚠️ Colonne coordonnées non configurée. Cliquez sur ⚙️ Config.');
+      return;
+    }
+
+    showLoader(true);
+    hideInfoCard();
+
+    // 1. Appliquer les filtres actifs
+    const filtered = applyCurrentFilters();
+
+    if (filtered.length === 0) {
+      showLoader(false);
+      markersLayer.clearLayers();
+      deptLayer.clearLayers();
+      removeLegend();
+      showStatus('Aucune donnée pour les filtres sélectionnés');
+      return;
+    }
+
+    // 2. Charger le GeoJSON si pas encore fait
     await loadDeptGeoJSON();
 
-    // Reconstruire les couches
+    // 3. Vider les couches précédentes
     markersLayer.clearLayers();
     deptLayer.clearLayers();
     deptColorMap = {};
 
-    // --- 1. Identifier les départements concernés par les données filtrées ---
-    // On récupère les noms/codes de départements présents dans les données
-    const deptNames = collectDeptNames(filteredRecords);
+    // 4. Identifier les départements concernés
+    const deptNames = collectDeptNames(filtered);
 
-    // --- 2. Dessiner les contours de départements ---
-    drawDepartements(deptNames);
+    // 5. Dessiner les contours de départements colorés
+    if (deptGeoJSON) drawDepartements(deptNames);
 
-    // --- 3. Placer les marqueurs ---
-    const bounds = [];
-    filteredRecords.forEach(record => {
+    // 6. Placer les marqueurs et collecter les bounds
+    const boundsArr = [];
+
+    filtered.forEach(record => {
       const coords = parseCoords(record[config.colCoords]);
-      if (!coords) return; // Ignore les enregistrements sans coordonnées valides
+      if (!coords) return;
 
-      bounds.push([coords.lat, coords.lon]);
+      boundsArr.push([coords.lat, coords.lon]);
 
-      // Titre de l'épingle
-      const title = record[config.colTitle] || 'Sans titre';
+      const title = String(record[config.colTitle] || 'Sans titre');
 
-      // Marqueur Leaflet avec popup minimal
-      // Le cartouche complet s'affiche dans info-card (panneau fixe)
+      // Marqueur circulaire : léger, lisible
       const marker = L.circleMarker([coords.lat, coords.lon], {
         radius      : 7,
-        fillColor   : '#4a90d9',
-        color       : '#1a5a9a',
+        fillColor   : '#2c7fdd',
+        color       : '#1a5aaa',
         weight      : 2,
         opacity     : 1,
-        fillOpacity : 0.85
+        fillOpacity : 0.88
       });
 
-      marker.bindTooltip(title, { permanent: false, direction: 'top' });
+      // Tooltip au survol
+      marker.bindTooltip(title, { permanent: false, direction: 'top', offset: [0, -6] });
 
-      // Au clic → afficher le cartouche latéral
+      // Clic → cartouche latéral
       marker.on('click', () => showInfoCard(record));
 
       markersLayer.addLayer(marker);
     });
 
-    // --- 4. Recentrer la carte sur les données affichées ---
-    if (bounds.length > 0) {
-      map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] });
+    // 7. Recentrer la carte sur les données affichées
+    if (boundsArr.length > 0) {
+      try {
+        map.fitBounds(L.latLngBounds(boundsArr), { padding: [40, 40], maxZoom: 12 });
+      } catch(e) {
+        console.warn('[CarteWidget] fitBounds error:', e);
+      }
     }
 
-    // --- 5. Mettre à jour la légende ---
+    // 8. Mettre à jour la légende
     updateLegend();
 
     showLoader(false);
-    showStatus(`${filteredRecords.length} point(s) affiché(s)`);
+    showStatus(`✓ ${filtered.length} point(s) affiché(s) sur ${allRecords.length} total`);
   }
 
   // ============================================================
-  //  DESSINER LES CONTOURS DES DÉPARTEMENTS
-  //  deptNamesSet : Set des noms/codes de départements à colorier
+  //  DESSIN DES CONTOURS DE DÉPARTEMENTS
   // ============================================================
   function drawDepartements(deptNamesSet) {
-    if (!deptGeoJSON) return;
+    if (!deptGeoJSON || deptNamesSet.size === 0) return;
 
-    // Attribuer une couleur pastel à chaque département présent
-    let colorIndex = 0;
+    // Attribuer une couleur pastel unique à chaque département présent
+    let idx = 0;
     deptNamesSet.forEach(name => {
-      deptColorMap[normalizeDeptName(name)] =
-        PASTEL_COLORS[colorIndex % PASTEL_COLORS.length];
-      colorIndex++;
+      const key = normKey(name);
+      if (!deptColorMap[key]) {
+        deptColorMap[key] = PASTEL_COLORS[idx % PASTEL_COLORS.length];
+        idx++;
+      }
     });
 
-    // Parcourir le GeoJSON et colorier les départements concernés
     L.geoJSON(deptGeoJSON, {
-      // Fonction de style : couleur pastel si département concerné,
-      // sinon transparent (pas de fond, juste un contour léger)
       style: (feature) => {
-        // Le GeoJSON de gregoiredavid utilise :
-        //   feature.properties.code (ex: "75")
-        //   feature.properties.nom  (ex: "Paris")
-        const code    = feature.properties.code || '';
-        const nom     = feature.properties.nom  || '';
-        const normNom = normalizeDeptName(nom);
-        const normCode= normalizeDeptName(code);
+        // Le GeoJSON utilise feature.properties.code et feature.properties.nom
+        const nomKey  = normKey(feature.properties.nom  || '');
+        const codeKey = normKey(feature.properties.code || '');
 
-        // Chercher si ce département est dans nos données
-        // On teste à la fois le nom et le code
-        const color = deptColorMap[normNom] || deptColorMap[normCode] || null;
+        const color = deptColorMap[nomKey] || deptColorMap[codeKey] || null;
 
-        if (color) {
-          return {
-            fillColor   : color,
-            fillOpacity : 0.45,
-            color       : '#555',
-            weight      : 1.5,
-            opacity     : 0.8
-          };
-        } else {
-          // Département sans données : contour très léger, pas de fond
-          return {
-            fillColor   : 'transparent',
-            fillOpacity : 0,
-            color       : '#bbb',
-            weight      : 0.5,
-            opacity     : 0.4
-          };
-        }
+        return color
+          ? { fillColor: color, fillOpacity: 0.45, color: '#555', weight: 1.5, opacity: 0.8 }
+          : { fillColor: 'transparent', fillOpacity: 0, color: '#bbb', weight: 0.5, opacity: 0.35 };
       },
 
-      // Tooltip sur chaque département au survol
       onEachFeature: (feature, layer) => {
         const nom  = feature.properties.nom  || '';
         const code = feature.properties.code || '';
-        layer.bindTooltip(`${nom} (${code})`, { sticky: true });
+        layer.bindTooltip(`<strong>${nom}</strong> (${code})`, { sticky: true });
       }
     }).addTo(deptLayer);
   }
 
   // ============================================================
-  //  COLLECTER LES NOMS DE DÉPARTEMENTS DANS LES DONNÉES
-  //  Retourne un Set des valeurs distinctes de la colonne dept
+  //  COLLECTE DES NOMS DE DÉPARTEMENTS DANS LES DONNÉES
   // ============================================================
   function collectDeptNames(records) {
     const names = new Set();
     if (!config.colDept) return names;
-
     records.forEach(r => {
-      const val = r[config.colDept];
-      if (val) names.add(String(val).trim());
+      const v = r[config.colDept];
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        names.add(String(v).trim());
+      }
     });
     return names;
   }
 
   // ============================================================
-  //  NORMALISATION DES NOMS DE DÉPARTEMENT
-  //  Pour faciliter la correspondance entre les données GRIST
-  //  et les noms/codes du GeoJSON
+  //  NORMALISATION POUR CORRESPONDANCE NOM/CODE DÉPARTEMENT
+  //  Supprime accents, met en minuscules, normalise espaces
   // ============================================================
-  function normalizeDeptName(str) {
+  function normKey(str) {
     return String(str)
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Supprimer les accents
-      .replace(/[-_\s]+/g, ' ')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[-_'\s]+/g, ' ')
       .trim();
   }
 
   // ============================================================
-  //  PARSER LES COORDONNÉES "lat,lon"
-  //  Retourne {lat, lon} ou null si invalide
+  //  PARSER LES COORDONNÉES
+  //  Accepte : "48.8566,2.3522" | "48.8566, 2.3522" | "48.8566;2.3522"
   // ============================================================
   function parseCoords(value) {
-    if (!value) return null;
+    if (value === null || value === undefined || value === '') return null;
     const str = String(value).trim();
-    // Accepte : "48.8566, 2.3522" ou "48.8566;2.3522" ou "48.8566 2.3522"
-    const parts = str.split(/[,;|\s]+/).filter(Boolean);
+    const parts = str.split(/[,;|\s]+/).map(s => s.trim()).filter(Boolean);
     if (parts.length < 2) return null;
     const lat = parseFloat(parts[0]);
     const lon = parseFloat(parts[1]);
@@ -850,105 +767,96 @@
   }
 
   // ============================================================
-  //  AFFICHER LE CARTOUCHE D'INFORMATION
-  //  record : l'objet enregistrement GRIST sélectionné
+  //  CARTOUCHE D'INFORMATION
   // ============================================================
   function showInfoCard(record) {
-    const card  = document.getElementById('info-card');
-    const title = document.getElementById('info-card-title');
-    const body  = document.getElementById('info-card-body');
+    document.getElementById('info-card-title').textContent =
+      String(record[config.colTitle] || 'Information');
 
-    title.textContent = record[config.colTitle] || 'Information';
+    const body = document.getElementById('info-card-body');
     body.innerHTML = '';
 
-    // Afficher toutes les variables configurées dans infoCols
     if (config.infoCols.length === 0) {
-      body.innerHTML = '<p style="color:#8a9ab0;font-size:12px">Aucune variable configurée</p>';
+      body.innerHTML = '<p style="color:#8a9ab0;font-size:11px;font-style:italic">Aucune variable configurée dans le cartouche.</p>';
     } else {
       config.infoCols.forEach(col => {
         if (!col) return;
-        const val = record[col] !== undefined ? record[col] : '—';
+        const val = record[col] !== undefined && record[col] !== null
+          ? String(record[col])
+          : '—';
         const row = document.createElement('div');
         row.className = 'info-row';
         row.innerHTML = `
-          <span class="info-label">${col}</span>
-          <span class="info-value">${val}</span>
-        `;
+          <span class="info-label">${escHtml(col)}</span>
+          <span class="info-value">${escHtml(val)}</span>`;
         body.appendChild(row);
       });
     }
 
-    card.style.display = 'block';
+    document.getElementById('info-card').style.display = 'block';
   }
 
   function hideInfoCard() {
     document.getElementById('info-card').style.display = 'none';
   }
 
+  // Échapper le HTML pour éviter les injections
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
   // ============================================================
-  //  MISE À JOUR DE LA LÉGENDE DES DÉPARTEMENTS
+  //  LÉGENDE
   // ============================================================
   function updateLegend() {
-    // Supprimer l'ancienne légende si elle existe
-    if (legendControl) {
-      map.removeControl(legendControl);
-      legendControl = null;
-    }
-
+    removeLegend();
     if (Object.keys(deptColorMap).length === 0) return;
 
-    // Créer un contrôle Leaflet personnalisé pour la légende
     legendControl = L.control({ position: 'bottomleft' });
 
     legendControl.onAdd = function() {
       const div = L.DomUtil.create('div', 'legend-control');
       div.innerHTML = '<h4>Départements</h4>';
 
-      // Reconstruire la correspondance nom affiché → couleur
-      // On parcourt le GeoJSON pour retrouver les noms complets
-      const displayed = {};
+      // Récupérer les noms complets depuis le GeoJSON
       if (deptGeoJSON) {
         deptGeoJSON.features.forEach(f => {
-          const nom  = f.properties.nom  || '';
-          const code = f.properties.code || '';
-          const norm = normalizeDeptName(nom);
-          if (deptColorMap[norm]) {
-            displayed[`${nom} (${code})`] = deptColorMap[norm];
+          const nomKey  = normKey(f.properties.nom  || '');
+          const codeKey = normKey(f.properties.code || '');
+          const color   = deptColorMap[nomKey] || deptColorMap[codeKey];
+          if (color) {
+            div.innerHTML += `
+              <div class="legend-item">
+                <div class="legend-color" style="background:${color}"></div>
+                <span>${escHtml(f.properties.nom)} (${escHtml(f.properties.code)})</span>
+              </div>`;
           }
         });
       }
-
-      Object.entries(displayed).forEach(([name, color]) => {
-        div.innerHTML += `
-          <div class="legend-item">
-            <div class="legend-color" style="background:${color}"></div>
-            <span>${name}</span>
-          </div>`;
-      });
-
       return div;
     };
 
     legendControl.addTo(map);
   }
 
+  function removeLegend() {
+    if (legendControl) { map.removeControl(legendControl); legendControl = null; }
+  }
+
   // ============================================================
-  //  GESTION DES FILTRES DYNAMIQUES
+  //  GESTION DES FILTRES
   // ============================================================
 
   /**
-   * Construire la barre de filtres à partir de la configuration.
-   * Chaque filterCol génère un <select multiple> avec un <label>.
-   * Les filtres région et département sont toujours présents en 1er
-   * si leurs colonnes sont configurées, suivis des filtres personnalisés.
+   * Construire la barre de filtres depuis la configuration courante.
+   * Ordre : région → département → filtres personnalisés
    */
   function buildFilterBar() {
-    const bar = document.getElementById('filter-bar');
-    // Supprimer les anciens groupes de filtres (mais pas les boutons)
-    bar.querySelectorAll('.filter-group').forEach(el => el.remove());
+    // Supprimer les anciens groupes
+    document.querySelectorAll('#filter-bar .filter-group').forEach(el => el.remove());
 
-    // Construire la liste complète des filtres à afficher
-    // Ordre : région, département, puis filtres personnalisés
     const allFilters = [];
     if (config.colRegion) allFilters.push({ col: config.colRegion, label: 'Région' });
     if (config.colDept)   allFilters.push({ col: config.colDept,   label: 'Département' });
@@ -957,182 +865,160 @@
     });
 
     const noMsg = document.getElementById('no-filter-msg');
+    noMsg.style.display = allFilters.length === 0 ? 'inline' : 'none';
 
-    if (allFilters.length === 0) {
-      noMsg.style.display = 'inline';
-      return;
-    }
-    noMsg.style.display = 'none';
-
-    // Insérer les groupes de filtres AVANT les boutons (qui sont en fin de bar)
-    const btnReset  = document.getElementById('btn-reset');
+    // Insérer avant btn-reset
+    const btnReset = document.getElementById('btn-reset');
 
     allFilters.forEach(({ col, label }) => {
       const group = document.createElement('div');
-      group.className = 'filter-group';
-      group.dataset.col = col; // Stocker la colonne associée pour la retrouver facilement
+      group.className  = 'filter-group';
+      group.dataset.col = col;
 
       const lbl = document.createElement('label');
       lbl.textContent = label;
+      lbl.title = col; // Tooltip avec le nom exact de la colonne
 
       const sel = document.createElement('select');
-      sel.multiple = true;
-      sel.dataset.col = col;
+      sel.multiple     = true;
+      sel.dataset.col  = col;
 
-      // Lors d'une sélection → mettre à jour les autres filtres en cascade
+      // Filtrage réactif en cascade au changement de sélection
       sel.addEventListener('change', () => reactiveFilters(col));
 
       group.appendChild(lbl);
       group.appendChild(sel);
-      bar.insertBefore(group, btnReset);
+      btnReset.parentNode.insertBefore(group, btnReset);
     });
 
-    // Peupler les selects avec toutes les valeurs disponibles
-    populateAllFilters(allRecords);
+    // Peupler avec toutes les données disponibles
+    if (allRecords.length > 0) {
+      populateAllFilters(allRecords);
+    }
   }
 
   /**
-   * Peupler tous les filtres avec les valeurs distinctes d'un jeu de données.
-   * Conserve les sélections existantes si possible.
+   * Peupler tous les selects avec les valeurs distinctes d'un jeu de données.
+   * Conserve les sélections existantes compatibles.
    */
   function populateAllFilters(records) {
-    document.querySelectorAll('.filter-group select').forEach(sel => {
+    document.querySelectorAll('#filter-bar .filter-group select').forEach(sel => {
       const col = sel.dataset.col;
-      // Mémoriser les valeurs actuellement sélectionnées
-      const selected = Array.from(sel.selectedOptions).map(o => o.value);
+      const prevSelected = Array.from(sel.selectedOptions).map(o => o.value);
 
-      // Collecter les valeurs distinctes pour cette colonne
       const values = [...new Set(
         records
           .map(r => r[col])
-          .filter(v => v !== undefined && v !== null && v !== '')
+          .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
           .map(v => String(v).trim())
-      )].sort((a, b) => a.localeCompare(b, 'fr'));
+      )].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 
       sel.innerHTML = '';
       values.forEach(v => {
         const opt = document.createElement('option');
         opt.value = v;
         opt.textContent = v;
-        // Rétablir la sélection précédente si la valeur est toujours présente
-        if (selected.includes(v)) opt.selected = true;
+        if (prevSelected.includes(v)) opt.selected = true;
         sel.appendChild(opt);
       });
     });
   }
 
   /**
-   * Filtrage réactif en cascade.
-   * Quand l'utilisateur change un filtre, on recalcule les valeurs
-   * disponibles dans TOUS les autres filtres en tenant compte
-   * des filtres déjà sélectionnés (sauf le filtre en cours de modification).
+   * Filtrage réactif : quand un filtre change, recalcule les options
+   * disponibles dans les autres filtres en tenant compte des sélections actives.
    *
-   * @param {string} changedCol - La colonne dont le filtre vient d'être modifié
+   * Principe : pour chaque filtre "autre que changedCol", on filtre allRecords
+   * en appliquant tous les filtres actifs SAUF celui de cet "autre" filtre.
+   * Cela permet de voir les combinaisons possibles sans perdre de valeurs utiles.
    */
   function reactiveFilters(changedCol) {
-    // Obtenir les sélections actuelles de TOUS les filtres
-    const currentSelections = getCurrentFilterSelections();
+    const selections = getCurrentFilterSelections();
 
-    // Appliquer tous les filtres SAUF celui de la colonne modifiée
-    // pour calculer l'ensemble des enregistrements compatibles avec
-    // les autres sélections actives
-    let compatibleRecords = allRecords.filter(record => {
-      for (const [col, vals] of Object.entries(currentSelections)) {
-        if (col === changedCol) continue; // Ignorer le filtre modifié
-        if (vals.length === 0) continue;  // Pas de sélection = pas de restriction
-        const recVal = record[col] !== undefined ? String(record[col]).trim() : '';
-        if (!vals.includes(recVal)) return false;
-      }
-      return true;
-    });
-
-    // Mettre à jour les options de chaque filtre (sauf celui modifié)
-    document.querySelectorAll('.filter-group select').forEach(sel => {
+    document.querySelectorAll('#filter-bar .filter-group select').forEach(sel => {
       const col = sel.dataset.col;
-      if (col === changedCol) return; // Ne pas toucher au filtre qui vient de changer
+      // Ne pas recalculer le filtre qui vient de changer
+      if (col === changedCol) return;
 
-      // Conserver la sélection actuelle de ce filtre
-      const selected = Array.from(sel.selectedOptions).map(o => o.value);
+      // Conserver les sélections actuelles de CE filtre
+      const prevSelected = Array.from(sel.selectedOptions).map(o => o.value);
 
-      // Recalculer les valeurs disponibles pour ce filtre
+      // Records compatibles avec tous les filtres SAUF le filtre "col" courant
+      const compatible = allRecords.filter(record => {
+        for (const [filterCol, vals] of Object.entries(selections)) {
+          if (filterCol === col) continue;       // Ignorer le filtre qu'on recalcule
+          if (vals.length === 0) continue;       // Filtre vide = pas de restriction
+          const rv = record[filterCol] !== undefined ? String(record[filterCol]).trim() : '';
+          if (!vals.includes(rv)) return false;
+        }
+        return true;
+      });
+
+      // Valeurs disponibles pour ce filtre
       const values = [...new Set(
-        compatibleRecords
+        compatible
           .map(r => r[col])
-          .filter(v => v !== undefined && v !== null && v !== '')
+          .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
           .map(v => String(v).trim())
-      )].sort((a, b) => a.localeCompare(b, 'fr'));
+      )].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 
       sel.innerHTML = '';
       values.forEach(v => {
         const opt = document.createElement('option');
         opt.value = v;
         opt.textContent = v;
-        // Ne conserver la sélection que si la valeur est toujours compatible
-        if (selected.includes(v)) opt.selected = true;
+        // Maintenir la sélection si toujours compatible
+        if (prevSelected.includes(v)) opt.selected = true;
         sel.appendChild(opt);
       });
     });
   }
 
-  /**
-   * Retourne un objet { colonne: [valeurs sélectionnées] } pour tous les filtres.
-   */
+  /** Retourne { col: [valeurs sélectionnées] } pour tous les filtres actifs */
   function getCurrentFilterSelections() {
-    const selections = {};
-    document.querySelectorAll('.filter-group select').forEach(sel => {
-      selections[sel.dataset.col] = Array.from(sel.selectedOptions).map(o => o.value);
+    const sel = {};
+    document.querySelectorAll('#filter-bar .filter-group select').forEach(s => {
+      sel[s.dataset.col] = Array.from(s.selectedOptions).map(o => o.value);
     });
-    return selections;
+    return sel;
   }
 
-  /**
-   * Appliquer les filtres actifs sur allRecords.
-   * Un enregistrement passe si, pour chaque filtre ayant au moins une valeur
-   * sélectionnée, la valeur de l'enregistrement est dans la sélection.
-   */
+  /** Filtre allRecords selon les sélections courantes */
   function applyCurrentFilters() {
     const selections = getCurrentFilterSelections();
-
     return allRecords.filter(record => {
       for (const [col, vals] of Object.entries(selections)) {
-        if (vals.length === 0) continue; // Filtre vide = pas de restriction
-        const recVal = record[col] !== undefined ? String(record[col]).trim() : '';
-        if (!vals.includes(recVal)) return false;
+        if (vals.length === 0) continue;
+        const rv = record[col] !== undefined ? String(record[col]).trim() : '';
+        if (!vals.includes(rv)) return false;
       }
       return true;
     });
   }
 
-  /**
-   * Réinitialiser tous les filtres (désélectionner tout).
-   */
+  /** Réinitialiser toutes les sélections */
   function resetFilters() {
-    document.querySelectorAll('.filter-group select').forEach(sel => {
+    document.querySelectorAll('#filter-bar .filter-group select').forEach(sel => {
       Array.from(sel.options).forEach(opt => opt.selected = false);
     });
-    // Rétablir toutes les options disponibles
     populateAllFilters(allRecords);
     hideInfoCard();
+    showStatus('Filtres réinitialisés');
   }
 
   // ============================================================
-  //  GESTION DU PANNEAU DE CONFIGURATION
+  //  PANNEAU DE CONFIGURATION
   // ============================================================
 
-  /**
-   * Ouvrir le panneau de configuration et pré-remplir les champs
-   * avec la configuration actuelle.
-   */
   function openConfigPanel() {
-    document.getElementById('cfg-table').value      = config.tableId   || '';
+    // Pré-remplir les champs avec la config actuelle
     document.getElementById('cfg-col-coords').value = config.colCoords || '';
     document.getElementById('cfg-col-title').value  = config.colTitle  || '';
     document.getElementById('cfg-col-region').value = config.colRegion || '';
     document.getElementById('cfg-col-dept').value   = config.colDept   || '';
 
-    // Remplir les listes dynamiques (infoCols et filterCols)
-    renderDynamicList('list-info-cols',   'info',   config.infoCols);
-    renderDynamicList('list-filter-cols', 'filter', config.filterCols);
+    renderDynamicList('list-info-cols',   config.infoCols);
+    renderDynamicList('list-filter-cols', config.filterCols);
 
     document.getElementById('config-panel').classList.add('visible');
   }
@@ -1141,33 +1027,13 @@
     document.getElementById('config-panel').classList.remove('visible');
   }
 
-  /**
-   * Afficher une liste d'items éditables dans la configuration.
-   * @param {string} containerId - ID du conteneur
-   * @param {string} type        - 'info' ou 'filter' (pour le placeholder)
-   * @param {Array}  values      - Valeurs actuelles
-   */
-  function renderDynamicList(containerId, type, values) {
+  function renderDynamicList(containerId, values) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
-    const placeholder = type === 'info'
-      ? 'ex: adresse'
-      : 'ex: statut';
-
-    (values || []).forEach(val => {
-      addDynamicItemWithValue(containerId, type, val, placeholder);
-    });
+    (values || []).forEach(val => addDynamicItemToList(containerId, val));
   }
 
-  /**
-   * Ajouter un item vide dans une liste dynamique de configuration.
-   */
-  function addDynamicItem(containerId, type) {
-    const placeholder = type === 'info' ? 'ex: adresse' : 'ex: statut';
-    addDynamicItemWithValue(containerId, type, '', placeholder);
-  }
-
-  function addDynamicItemWithValue(containerId, type, value, placeholder) {
+  function addDynamicItemToList(containerId, value = '') {
     const container = document.getElementById(containerId);
     const item = document.createElement('div');
     item.className = 'dynamic-item';
@@ -1175,94 +1041,125 @@
     const input = document.createElement('input');
     input.type        = 'text';
     input.value       = value;
-    input.placeholder = placeholder || 'Nom de colonne';
+    input.placeholder = 'Nom de colonne (ex: adresse)';
 
     const btnDel = document.createElement('button');
     btnDel.textContent = '✕';
-    btnDel.title       = 'Supprimer';
-    btnDel.onclick     = () => item.remove();
+    btnDel.title = 'Supprimer';
+    btnDel.addEventListener('click', () => item.remove());
 
     item.appendChild(input);
     item.appendChild(btnDel);
     container.appendChild(item);
+    input.focus();
   }
 
-  /**
-   * Lire les valeurs de la liste dynamique et les retourner sous forme de tableau.
-   */
   function readDynamicList(containerId) {
     return Array.from(
       document.querySelectorAll(`#${containerId} .dynamic-item input`)
-    )
-      .map(inp => inp.value.trim())
-      .filter(Boolean);
+    ).map(inp => inp.value.trim()).filter(Boolean);
   }
 
-  /**
-   * Sauvegarder la configuration dans les options GRIST.
-   */
   async function saveConfig() {
     const newConfig = {
-      tableId   : document.getElementById('cfg-table').value.trim(),
-      colCoords : document.getElementById('cfg-col-coords').value.trim(),
-      colTitle  : document.getElementById('cfg-col-title').value.trim(),
-      colRegion : document.getElementById('cfg-col-region').value.trim(),
-      colDept   : document.getElementById('cfg-col-dept').value.trim(),
-      infoCols  : readDynamicList('list-info-cols'),
-      filterCols: readDynamicList('list-filter-cols')
+      colCoords  : document.getElementById('cfg-col-coords').value.trim(),
+      colTitle   : document.getElementById('cfg-col-title').value.trim(),
+      colRegion  : document.getElementById('cfg-col-region').value.trim(),
+      colDept    : document.getElementById('cfg-col-dept').value.trim(),
+      infoCols   : readDynamicList('list-info-cols'),
+      filterCols : readDynamicList('list-filter-cols')
     };
 
-    // Validation minimale
-    if (!newConfig.tableId) {
-      alert('Le nom de la table est requis.');
+    if (!newConfig.colCoords) {
+      alert('La colonne coordonnées est obligatoire.');
       return;
     }
 
     config = newConfig;
-
-    // Persister dans GRIST
-    await grist.setOptions(config);
-
     closeConfigPanel();
 
-    // Reconstruire les filtres avec la nouvelle config
+    // Persister dans GRIST (les options sont rechargées via onOptions si nécessaire)
+    try {
+      await grist.setOptions(config);
+      console.log('[CarteWidget] Options sauvegardées dans GRIST:', config);
+    } catch(err) {
+      console.warn('[CarteWidget] Impossible de sauvegarder les options GRIST:', err);
+    }
+
     buildFilterBar();
-    showStatus('Configuration sauvegardée. Sélectionnez des filtres puis mettez à jour la carte.');
+    showStatus('✓ Configuration sauvegardée');
   }
 
   // ============================================================
   //  UTILITAIRES UI
   // ============================================================
 
-  function showLoader(visible) {
-    document.getElementById('loader').classList.toggle('visible', visible);
+  function showLoader(v) {
+    document.getElementById('loader').classList.toggle('visible', v);
   }
 
-  let statusTimer = null;
-  function showStatus(msg, duration = 4000) {
+  let _statusTimer = null;
+  function showStatus(msg, duration = 5000) {
     const el = document.getElementById('status-msg');
-    el.textContent = msg;
+    el.textContent   = msg;
     el.style.display = 'block';
-    if (statusTimer) clearTimeout(statusTimer);
-    statusTimer = setTimeout(() => {
-      el.style.display = 'none';
-    }, duration);
+    if (_statusTimer) clearTimeout(_statusTimer);
+    _statusTimer = setTimeout(() => { el.style.display = 'none'; }, duration);
+  }
+
+  function updateDataBadge() {
+    const badge = document.getElementById('data-badge');
+    if (allRecords.length > 0) {
+      badge.textContent  = `${allRecords.length} enreg.`;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
   }
 
   // ============================================================
-  //  INTÉGRATION GRIST API
+  //  INTÉGRATION GRIST
+  //
+  //  Ordre d'initialisation IMPORTANT :
+  //  1. grist.ready()   → déclare le widget et ses capacités
+  //  2. grist.onOptions → reçoit la configuration persistée
+  //  3. grist.onRecords → reçoit les données de la table liée
+  //
+  //  grist.onRecords est appelé automatiquement par GRIST à
+  //  chaque fois que les données de la table liée changent.
+  //  C'est le mécanisme principal de réception des données
+  //  (pas besoin de fetchTable).
   // ============================================================
 
-  /**
-   * GRIST appelle cette fonction avec les options sauvegardées
-   * lors de l'initialisation du widget.
-   */
-  function onGristOptions(options) {
+  // --- 3. Réception des enregistrements ---
+  // GRIST appelle cette callback dès que les données sont disponibles
+  // ou mises à jour dans la table liée au widget.
+  grist.onRecords(function(records) {
+    console.log('[CarteWidget] onRecords reçu :', records ? records.length : 0, 'enregistrements');
+
+    if (!records || records.length === 0) {
+      allRecords = [];
+      updateDataBadge();
+      showStatus('⚠️ Aucun enregistrement reçu de GRIST');
+      return;
+    }
+
+    allRecords = records;
+    updateDataBadge();
+
+    // Reconstruire les filtres avec les nouvelles données
+    buildFilterBar();
+
+    showStatus(`✓ ${allRecords.length} enregistrement(s) chargé(s)`);
+  });
+
+  // --- 2. Réception des options (configuration persistée) ---
+  grist.onOptions(function(options) {
+    console.log('[CarteWidget] onOptions reçu :', options);
+
     if (!options) return;
 
-    // Fusionner les options reçues dans config
     config = Object.assign({
-      tableId    : '',
       colCoords  : '',
       colTitle   : '',
       colRegion  : '',
@@ -1271,71 +1168,19 @@
       filterCols : []
     }, options);
 
-    // Si une table est configurée, on s'abonne à ses données
-    if (config.tableId) {
-      // Demander à GRIST de nous envoyer les données de la table configurée
-      // onRecords sera appelé automatiquement dès que les données sont disponibles
-      grist.docApi.fetchTable(config.tableId).then(tableData => {
-        allRecords = gristTableToRecords(tableData);
-        buildFilterBar();
-        showStatus('Données chargées. Sélectionnez des filtres puis mettez à jour la carte.');
-      }).catch(err => {
-        console.error('Erreur fetchTable:', err);
-        showStatus('Erreur lors du chargement de la table : ' + config.tableId);
-      });
-    }
-  }
-
-  /**
-   * Convertir le format de table GRIST (colonnes séparées) en tableau d'objets.
-   * GRIST renvoie les tables sous la forme :
-   *   { colName1: [val1, val2, ...], colName2: [val1, val2, ...], ... }
-   * On le transforme en :
-   *   [{ colName1: val1, colName2: val1, ... }, ...]
-   */
-  function gristTableToRecords(tableData) {
-    if (!tableData) return [];
-    const columns = Object.keys(tableData);
-    if (columns.length === 0) return [];
-
-    const length = tableData[columns[0]].length;
-    const records = [];
-
-    for (let i = 0; i < length; i++) {
-      const record = {};
-      columns.forEach(col => {
-        record[col] = tableData[col][i];
-      });
-      records.push(record);
-    }
-    return records;
-  }
-
-  /**
-   * GRIST peut transmettre les enregistrements de la table liée
-   * via l'événement 'onRecords' quand le widget est configuré en
-   * mode "Linked widget".
-   */
-  grist.onRecords(records => {
-    if (!records || records.length === 0) return;
-    allRecords = records;
+    // Reconstruire les filtres avec la nouvelle configuration
     buildFilterBar();
   });
 
-  /**
-   * Écouter les mises à jour des options (changement de configuration).
-   */
-  grist.onOptions((options) => {
-    onGristOptions(options);
-  });
-
-  /**
-   * GRIST appelle cette fonction quand il passe en mode "édition de configuration".
-   * On ouvre notre panneau de configuration.
-   */
+  // --- 1. Déclaration du widget GRIST ---
+  // requiredAccess : 'read table' suffit pour lire les données
+  // onEditOptions  : callback déclenchée par GRIST quand l'utilisateur
+  //                  clique sur le bouton de configuration du widget
+  //                  (icône crayon dans le panneau GRIST)
   grist.ready({
-    requiredAccess: 'read table',
-    onEditOptions : () => {
+    requiredAccess : 'read table',
+    onEditOptions  : function() {
+      // Ouvre notre panneau de configuration custom
       openConfigPanel();
     }
   });
@@ -1344,23 +1189,37 @@
   //  ÉVÉNEMENTS BOUTONS
   // ============================================================
 
-  document.getElementById('btn-update').addEventListener('click', updateMap);
+  document.getElementById('btn-update')
+    .addEventListener('click', updateMap);
 
-  document.getElementById('btn-reset').addEventListener('click', resetFilters);
+  document.getElementById('btn-reset')
+    .addEventListener('click', resetFilters);
 
-  document.getElementById('info-card-close').addEventListener('click', hideInfoCard);
+  document.getElementById('btn-config')
+    .addEventListener('click', openConfigPanel);
 
-  document.getElementById('btn-config-save').addEventListener('click', saveConfig);
+  document.getElementById('info-card-close')
+    .addEventListener('click', hideInfoCard);
 
-  document.getElementById('btn-config-cancel').addEventListener('click', closeConfigPanel);
+  document.getElementById('btn-config-save')
+    .addEventListener('click', saveConfig);
+
+  document.getElementById('btn-config-cancel')
+    .addEventListener('click', closeConfigPanel);
+
+  document.getElementById('btn-add-info')
+    .addEventListener('click', () => addDynamicItemToList('list-info-cols'));
+
+  document.getElementById('btn-add-filter')
+    .addEventListener('click', () => addDynamicItemToList('list-filter-cols'));
 
   // ============================================================
   //  DÉMARRAGE
   // ============================================================
   initMap();
 
-  // Pré-charger le GeoJSON des départements en arrière-plan
-  // pour accélérer le premier affichage de la carte
+  // Pré-charger le GeoJSON en arrière-plan pour accélérer
+  // le premier clic sur "Mettre à jour"
   loadDeptGeoJSON();
 
   </script>
