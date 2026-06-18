@@ -1,4 +1,4 @@
-f<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -29,7 +29,7 @@ f<!DOCTYPE html>
             z-index: 1000;
         }
         
-        /* Style des Dropdowns Personnalisés à cases à cocher */
+        /* Style des Dropdowns Personnalisés */
         .multiselect-container {
             position: relative;
             display: inline-block;
@@ -95,7 +95,7 @@ f<!DOCTYPE html>
             color: #334155;
             cursor: pointer;
         }
-        .multiselect-option:hover {
+        .multiselect-option hover {
             background-color: #f1f5f9;
         }
         .multiselect-option input {
@@ -126,7 +126,6 @@ f<!DOCTYPE html>
             width: 100%;
         }
         
-        /* Style des popups MapLibre */
         .maplibregl-popup-content {
             font-size: 13px;
             line-height: 1.4;
@@ -161,12 +160,12 @@ f<!DOCTYPE html>
 <script>
     // --- Variables globales ---
     let map;
+    let isMapStyleLoaded = false;
     let mappedRecords = [];    
     let currentConfig = {};    
     let geojsonFranceData = null; 
     let currentPopup = null;
 
-    // Initialisation de la carte MapLibre GL avec le style Vector Tiles IGN demandé
     function initMap() {
         map = new maplibregl.Map({
             container: 'map',
@@ -176,9 +175,10 @@ f<!DOCTYPE html>
             attributionControl: true
         });
 
-        // Une fois le style de la carte chargé, on prépare les couches de données vides
-        map.on('load', () => {
-            // Source et couche pour les contours de départements
+        map.on('style.load', () => {
+            isMapStyleLoaded = true;
+
+            // Enregistrement des sources vectorielles
             map.addSource('depts-source', {
                 type: 'geojson',
                 data: { type: 'FeatureCollection', features: [] }
@@ -189,7 +189,6 @@ f<!DOCTYPE html>
                 type: 'fill',
                 source: 'depts-source',
                 paint: {
-                    // Utilise la propriété de couleur pastel générée à la volée dans le GeoJSON
                     'fill-color': ['get', 'randomPastelColor'],
                     'fill-opacity': 0.5
                 }
@@ -205,7 +204,6 @@ f<!DOCTYPE html>
                 }
             });
 
-            // Source et couche pour les cercles blancs (10px diamètre, contour noir 1px)
             map.addSource('points-source', {
                 type: 'geojson',
                 data: { type: 'FeatureCollection', features: [] }
@@ -216,14 +214,13 @@ f<!DOCTYPE html>
                 type: 'circle',
                 source: 'points-source',
                 paint: {
-                    'circle-radius': 5, // Rayon de 5px = Diamètre de 10px
+                    'circle-radius': 5,
                     'circle-color': '#ffffff',
                     'circle-stroke-width': 1,
                     'circle-stroke-color': '#000000'
                 }
             });
 
-            // Gestion du clic sur les cercles pour ouvrir le cartouche d'information (Popup)
             map.on('click', 'points-layer', (e) => {
                 const coordinates = e.features[0].geometry.coordinates.slice();
                 const description = e.features[0].properties.popupHtml;
@@ -236,35 +233,30 @@ f<!DOCTYPE html>
                     .addTo(map);
             });
 
-            // Changement de curseur au survol des points
             map.on('mouseenter', 'points-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
             map.on('mouseleave', 'points-layer', () => { map.getCanvas().style.cursor = ''; });
         });
     }
 
-    // Chargement asynchrone des contours GeoJSON des départements français
     async function loadDeptGeoJSON() {
         try {
             const response = await fetch('https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements.geojson');
             geojsonFranceData = await response.json();
         } catch (err) {
-            console.error("Erreur lors du chargement des contours de départements :", err);
+            console.error("Erreur GeoJSON :", err);
         }
     }
 
-    // Générateur de couleurs de fond pastel aléatoires pour les départements
     function getPastelColor() {
         const hue = Math.floor(Math.random() * 360);
         return `hsl(${hue}, 75%, 85%)`;
     }
 
-    // Convertit une chaîne séparée par des virgules en tableau
     function parseList(str) {
         if (!str) return [];
         return str.split(',').map(s => s.trim()).filter(s => s.length > 0);
     }
 
-    // Gestion de l'ouverture / fermeture des menus déroulants
     function toggleDropdown(contentId) {
         const dropdowns = document.getElementsByClassName("multiselect-content");
         for (let i = 0; i < dropdowns.length; i++) {
@@ -284,20 +276,19 @@ f<!DOCTYPE html>
         }
     }
 
-    // --- Remplissage des options sous forme de cases à cocher ---
-    function populateFilters(dataToUse = mappedRecords, changedFilterId = null) {
-        const regions = [...new Set(dataToUse.map(r => r.colRegion))].filter(Boolean).sort();
-        const depts = [...new Set(dataToUse.map(r => r.colDept))].filter(Boolean).sort();
+    function populateFilters(dataToUse = mappedRecords, changedContentId = null) {
+        const regions = [...new Set(dataToUse.map(r => r.colRegion))].filter(val => val !== null && val !== undefined && val !== '').sort();
+        const depts = [...new Set(dataToUse.map(r => r.colDept))].filter(val => val !== null && val !== undefined && val !== '').sort();
 
-        updateCheckboxOptions('content-region', 'btn-region', regions, changedFilterId !== 'content-region');
-        updateCheckboxOptions('content-dept', 'btn-dept', depts, changedFilterId !== 'content-dept');
+        updateCheckboxOptions('content-region', 'btn-region', regions, changedContentId !== 'content-region');
+        updateCheckboxOptions('content-dept', 'btn-dept', depts, changedFilterId = changedContentId !== 'content-dept');
 
         const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
             const contentId = `content-custom-${colName}`;
             const btnId = `btn-custom-${colName}`;
-            const vals = [...new Set(dataToUse.map(r => r.customFields ? r.customFields[colName] : null))].filter(Boolean).sort();
-            updateCheckboxOptions(contentId, btnId, vals, changedFilterId !== contentId);
+            const vals = [...new Set(dataToUse.map(r => r.customFields ? r.customFields[colName] : null))].filter(val => val !== null && val !== undefined && val !== '').sort();
+            updateCheckboxOptions(contentId, btnId, vals, changedContentId !== contentId);
         });
     }
 
@@ -367,9 +358,12 @@ f<!DOCTYPE html>
         });
     }
 
-    // --- Actionneur principal : Mise à jour MapLibre GL ---
+    // --- Actionneur principal sécurisé ---
     function updateMap() {
-        if (!map.getSource('points-source') || !map.getSource('depts-source')) return;
+        if (!isMapStyleLoaded) {
+            console.warn("Le style de la carte n'est pas encore complètement chargé.");
+            return;
+        }
 
         if (currentPopup) currentPopup.remove();
 
@@ -382,40 +376,34 @@ f<!DOCTYPE html>
             dataToShow = applyFilterSelection(dataToShow, `content-custom-${colName}`, colName, true);
         });
 
-        if (dataToShow.length === 0) {
-            alert("Aucune donnée ne correspond aux critères sélectionnés.");
-            return;
-        }
+        console.log(`Données filtrées à afficher : ${dataToShow.length} lignes sur un total de ${mappedRecords.length}.`);
 
         const pointFeatures = [];
         const activeDepts = new Set();
         const bounds = new maplibregl.LngLatBounds();
         let hasValidBounds = false;
 
-        // 1. Génération du GeoJSON pour les cercles
-        dataToShow.forEach(record => {
-            //ogl
-            console.log("ogl");
+        dataToShow.forEach((record, index) => {
             const latLngStr = record.colLatLng;
             if (!latLngStr) return;
 
-
-            const parts = latLngStr.split(',');
+            // Nettoyage complet de la chaîne pour enlever espaces indésirables ou sauts de ligne
+            const cleanStr = String(latLngStr).replace(/[\r\n\t]/g, "").trim();
+            const parts = cleanStr.split(',');
             if (parts.length !== 2) return;
             
             const lat = parseFloat(parts[0].trim());
             const lng = parseFloat(parts[1].trim());
 
-            if (!isNaN(lat) && !isNaN(lng)) {
-                // ATTENTION : MapLibre prend [Longitude, Latitude] à l'inverse de Leaflet
+            // Validation mathématique rigoureuse des coordonnées numériques
+            if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
                 bounds.extend([lng, lat]);
                 hasValidBounds = true;
 
-                // Génération du contenu HTML du cartouche d'information
                 let popupHtml = `<div class="info-popup"><strong>${record.colTitle || 'Sans titre'}</strong><br><hr>`;
                 const displayVars = parseList(currentConfig.displayVariables);
                 displayVars.forEach(v => {
-                    if (record.customFields && record.customFields[v] !== undefined) {
+                    if (record.customFields && record.customFields[v] !== undefined && record.customFields[v] !== null) {
                         popupHtml += `<b>${v} :</b> ${record.customFields[v]}<br>`;
                     }
                 });
@@ -430,21 +418,21 @@ f<!DOCTYPE html>
                 if (record.colDept) {
                     activeDepts.add(String(record.colDept).trim());
                 }
+            } else {
+                console.warn(`Ligne d'index ${index} ignorée. Coordonnées invalides : "${latLngStr}"`);
             }
         });
 
-        // Injection des points calculés dans la carte vectorielle
+        // Mise à jour sécurisée des couches MapLibre
         map.getSource('points-source').setData({
             type: 'FeatureCollection',
             features: pointFeatures
         });
 
-        // 2. Génération du GeoJSON filtré pour les contours de départements
         if (geojsonFranceData && activeDepts.size > 0) {
             const filteredFeatures = geojsonFranceData.features
                 .filter(f => activeDepts.has(f.properties.nom) || activeDepts.has(f.properties.code))
                 .map(f => {
-                    // On attribue une couleur pastel unique stockée directement dans l'entité GeoJSON
                     f.properties.randomPastelColor = getPastelColor();
                     return f;
                 });
@@ -457,13 +445,13 @@ f<!DOCTYPE html>
             map.getSource('depts-source').setData({ type: 'FeatureCollection', features: [] });
         }
 
-        // 3. Zoom automatique et recentrage adaptatif
         if (hasValidBounds) {
             map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+        } else {
+            alert("Aucun point avec des coordonnées géographiques valides n'a été trouvé pour cette sélection.");
         }
     }
 
-    // --- Génération de l'interface pour les N filtres supplémentaires ---
     function setupDynamicFilterDOM() {
         const container = document.getElementById('dynamic-filters');
         container.innerHTML = '';
@@ -497,7 +485,6 @@ f<!DOCTYPE html>
         });
     }
 
-    // --- Couplage avec Grist API ---
     grist.ready({
         requiredAccess: 'read table',
         columns: [
