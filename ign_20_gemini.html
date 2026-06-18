@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+f<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -396,6 +396,8 @@
         dataToShow.forEach(record => {
             const latLngStr = record.colLatLng;
             if (!latLngStr) return;
+            //ogl
+            console.log("ogl");
 
             const parts = latLngStr.split(',');
             if (parts.length !== 2) return;
