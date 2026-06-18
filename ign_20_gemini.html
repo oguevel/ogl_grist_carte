@@ -394,10 +394,11 @@ f<!DOCTYPE html>
 
         // 1. Génération du GeoJSON pour les cercles
         dataToShow.forEach(record => {
-            const latLngStr = record.colLatLng;
-            if (!latLngStr) return;
             //ogl
             console.log("ogl");
+            const latLngStr = record.colLatLng;
+            if (!latLngStr) return;
+
 
             const parts = latLngStr.split(',');
             if (parts.length !== 2) return;
