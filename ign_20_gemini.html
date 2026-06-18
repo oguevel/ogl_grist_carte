@@ -95,7 +95,7 @@
             color: #334155;
             cursor: pointer;
         }
-        .multiselect-option hover {
+        .multiselect-option:hover {
             background-color: #f1f5f9;
         }
         .multiselect-option input {
@@ -132,6 +132,19 @@
             font-family: Arial, sans-serif;
             padding: 12px;
             border-radius: 6px;
+            max-height: 300px;
+            overflow-y: auto;
+            min-width: 220px;
+        }
+        .popup-establishment-block {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #cbd5e1;
+        }
+        .popup-establishment-block:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
         }
     </style>
 </head>
@@ -158,7 +171,6 @@
     <div id="map"></div>
 
 <script>
-    // --- Variables globales ---
     let map;
     let isMapStyleLoaded = false;
     let mappedRecords = [];    
@@ -178,7 +190,6 @@
         map.on('style.load', () => {
             isMapStyleLoaded = true;
 
-            // Enregistrement des sources vectorielles
             map.addSource('depts-source', {
                 type: 'geojson',
                 data: { type: 'FeatureCollection', features: [] }
@@ -214,9 +225,14 @@
                 type: 'circle',
                 source: 'points-source',
                 paint: {
-                    'circle-radius': 5,
-                    'circle-color': '#ffffff',
-                    'circle-stroke-width': 1,
+                    'circle-radius': 6,
+                    // Si le point contient plusieurs établissements superposés, il prend une couleur orange/jaune, sinon blanc pur
+                    'circle-color': [
+                        'case',
+                        ['>', ['get', 'count'], 1], '#f59e0b', 
+                        '#ffffff'
+                    ],
+                    'circle-stroke-width': 1.5,
                     'circle-stroke-color': '#000000'
                 }
             });
@@ -281,7 +297,7 @@
         const depts = [...new Set(dataToUse.map(r => r.colDept))].filter(val => val !== null && val !== undefined && val !== '').sort();
 
         updateCheckboxOptions('content-region', 'btn-region', regions, changedContentId !== 'content-region');
-        updateCheckboxOptions('content-dept', 'btn-dept', depts, changedFilterId = changedContentId !== 'content-dept');
+        updateCheckboxOptions('content-dept', 'btn-dept', depts, changedContentId !== 'content-dept');
 
         const customFilterNames = parseList(currentConfig.filterVariables);
         customFilterNames.forEach(colName => {
@@ -358,13 +374,8 @@
         });
     }
 
-    // --- Actionneur principal sécurisé ---
     function updateMap() {
-        if (!isMapStyleLoaded) {
-            console.warn("Le style de la carte n'est pas encore complètement chargé.");
-            return;
-        }
-
+        if (!isMapStyleLoaded) return;
         if (currentPopup) currentPopup.remove();
 
         let dataToShow = [...mappedRecords];
@@ -376,18 +387,19 @@
             dataToShow = applyFilterSelection(dataToShow, `content-custom-${colName}`, colName, true);
         });
 
-        console.log(`Données filtrées à afficher : ${dataToShow.length} lignes sur un total de ${mappedRecords.length}.`);
+        console.log(`Données filtrées à traiter : ${dataToShow.length} lignes.`);
 
-        const pointFeatures = [];
         const activeDepts = new Set();
         const bounds = new maplibregl.LngLatBounds();
         let hasValidBounds = false;
+
+        // Dictionnaire pour regrouper les établissements ayant la même clé de coordonnées "lng,lat"
+        const groups = {};
 
         dataToShow.forEach((record, index) => {
             const latLngStr = record.colLatLng;
             if (!latLngStr) return;
 
-            // Nettoyage complet de la chaîne pour enlever espaces indésirables ou sauts de ligne
             const cleanStr = String(latLngStr).replace(/[\r\n\t]/g, "").trim();
             const parts = cleanStr.split(',');
             if (parts.length !== 2) return;
@@ -395,12 +407,42 @@
             const lat = parseFloat(parts[0].trim());
             const lng = parseFloat(parts[1].trim());
 
-            // Validation mathématique rigoureuse des coordonnées numériques
             if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
-                bounds.extend([lng, lat]);
-                hasValidBounds = true;
+                const coordKey = `${lng}_${lat}`;
+                if (!groups[coordKey]) {
+                    groups[coordKey] = {
+                        lng: lng,
+                        lat: lat,
+                        records: []
+                    };
+                }
+                groups[coordKey].records.push(record);
 
-                let popupHtml = `<div class="info-popup"><strong>${record.colTitle || 'Sans titre'}</strong><br><hr>`;
+                if (record.colDept) {
+                    activeDepts.add(String(record.colDept).trim());
+                }
+            }
+        });
+
+        const pointFeatures = [];
+
+        // Parcourir les groupes géographiques uniques pour construire les fenêtres popups fusionnées
+        Object.keys(groups).forEach(key => {
+            const group = groups[key];
+            bounds.extend([group.lng, group.lat]);
+            hasValidBounds = true;
+
+            let popupHtml = "";
+            
+            // Si plusieurs établissements au même endroit, on indique un en-tête groupé
+            if (group.records.length > 1) {
+                popupHtml += `<div style="font-weight:bold; color:#f59e0b; margin-bottom:8px;">🏢 ${group.records.length} Établissements superposés :</div>`;
+            }
+
+            group.records.forEach((record) => {
+                popupHtml += `<div class="popup-establishment-block">`;
+                popupHtml += `<strong>${record.colTitle || 'Sans titre'}</strong><br>`;
+                
                 const displayVars = parseList(currentConfig.displayVariables);
                 displayVars.forEach(v => {
                     if (record.customFields && record.customFields[v] !== undefined && record.customFields[v] !== null) {
@@ -408,22 +450,18 @@
                     }
                 });
                 popupHtml += `</div>`;
+            });
 
-                pointFeatures.push({
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: [lng, lat] },
-                    properties: { popupHtml: popupHtml }
-                });
-
-                if (record.colDept) {
-                    activeDepts.add(String(record.colDept).trim());
+            pointFeatures.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [group.lng, group.lat] },
+                properties: { 
+                    popupHtml: popupHtml,
+                    count: group.records.length // Transmis au style pour la gestion dynamique des couleurs
                 }
-            } else {
-                console.warn(`Ligne d'index ${index} ignorée. Coordonnées invalides : "${latLngStr}"`);
-            }
+            });
         });
 
-        // Mise à jour sécurisée des couches MapLibre
         map.getSource('points-source').setData({
             type: 'FeatureCollection',
             features: pointFeatures
@@ -446,9 +484,9 @@
         }
 
         if (hasValidBounds) {
-            map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+            map.fitBounds(bounds, { padding: 60, maxZoom: 15 });
         } else {
-            alert("Aucun point avec des coordonnées géographiques valides n'a été trouvé pour cette sélection.");
+            alert("Aucune coordonnée exploitable sur la sélection actuelle.");
         }
     }
 
