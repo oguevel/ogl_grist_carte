@@ -1,258 +1,274 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Widget GRIST – Configuration uniquement</title>
-  
+  <meta charset="UTF-8" />
+  <title>Configuration Widget GRIST</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f4f6f8;
+      font-family: 'Segoe UI', Arial, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
+      background: #f0f2f5;
     }
-    #status {
-      margin-bottom: 20px;
-      padding: 10px;
-      background: #e8eef6;
-      border-left: 4px solid #4a90d9;
-      font-size: 13px;
-    }
+    
+    /* ====================================================== 
+       PANNEAU DE CONFIGURATION 
+       ====================================================== */
     #config-panel {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      justify-content: center;
+      align-items: center;
+    }
+    
+    #config-box {
       background: #fff;
-      padding: 25px;
-      border-radius: 8px;
-      max-width: 600px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      border-radius: 12px;
+      padding: 28px 32px;
+      width: 560px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
     }
-    h2 {
-      margin-top: 0;
+    
+    #config-box h2 {
+      font-size: 17px;
+      color: #1a2a3a;
+      margin-bottom: 20px;
     }
+    
+    .config-section {
+      margin-bottom: 18px;
+    }
+    
+    .config-section h4 {
+      font-size: 12px;
+      color: #4a90d9;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    
     .config-row {
       display: flex;
       flex-direction: column;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
+    
     .config-row label {
       font-size: 12px;
-      font-weight: bold;
+      font-weight: 600;
+      color: #5a6a7a;
       margin-bottom: 3px;
     }
+    
     .config-row input {
-      padding: 6px;
+      padding: 7px 10px;
+      border: 1px solid #c0cad6;
+      border-radius: 5px;
       font-size: 13px;
     }
+    
     .dynamic-list {
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
+    
     .dynamic-item {
       display: flex;
-      gap: 5px;
+      align-items: center;
+      gap: 6px;
     }
+    
     .dynamic-item input {
       flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #c0cad6;
+      border-radius: 5px;
+      font-size: 12px;
     }
+    
     .dynamic-item button {
-      background: #e74c3c;
-      color: white;
+      background: #fdecea;
       border: none;
+      border-radius: 4px;
+      color: #c0392b;
+      font-size: 14px;
       cursor: pointer;
       padding: 4px 8px;
     }
-    button {
-      padding: 8px 14px;
-      margin-top: 10px;
+    
+    .btn-add {
+      background: #eaf3fb;
+      border: 1px dashed #4a90d9;
+      border-radius: 5px;
+      color: #4a90d9;
+      font-size: 12px;
       cursor: pointer;
+      padding: 5px 10px;
+      margin-top: 4px;
     }
-    #btn-save {
-      background: #4a90d9;
-      color: white;
+    
+    .config-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+    
+    .config-buttons button {
+      padding: 9px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
       border: none;
     }
-    #btn-add {
-      background: #ddd;
-      border: none;
+    
+    #btn-config-save {
+      background: linear-gradient(135deg, #4a90d9, #2c6fad);
+      color: #fff;
+    }
+    
+    #btn-config-cancel {
+      background: #e8ecf0;
+      color: #5a6a7a;
     }
   </style>
 </head>
 <body>
 
-  <div id="status">Widget initialisé.</div>
-  
   <div id="config-panel">
-    <h2>Configuration du widget</h2>
-    
-    <div class="config-row">
-      <label>Nom de la table</label>
-      <input id="cfg-table" placeholder="ex: etablissements">
+    <div id="config-box">
+      <h2>⚙️ Configuration du widget Carte</h2>
+      
+      <div class="config-section">
+        <h4>Colonnes de base</h4>
+        <div class="config-row">
+          <label>Nom de la table liée</label>
+          <input type="text" id="cfg-table" />
+        </div>
+        <div class="config-row">
+          <label>Colonne coordonnées (lat,lon)</label>
+          <input type="text" id="cfg-col-coords" />
+        </div>
+        <div class="config-row">
+          <label>Colonne titre</label>
+          <input type="text" id="cfg-col-title" />
+        </div>
+        <div class="config-row">
+          <label>Colonne régions</label>
+          <input type="text" id="cfg-col-region" />
+        </div>
+        <div class="config-row">
+          <label>Colonne départements</label>
+          <input type="text" id="cfg-col-dept" />
+        </div>
+      </div>
+      
+      <div class="config-section">
+        <h4>Variables affichées dans le cartouche</h4>
+        <div class="dynamic-list" id="list-info-cols"></div>
+        <button class="btn-add" onclick="addDynamicItem('list-info-cols','info')">
+          + Ajouter une variable
+        </button>
+      </div>
+      
+      <div class="config-section">
+        <h4>Variables utilisées comme filtres</h4>
+        <div class="dynamic-list" id="list-filter-cols"></div>
+        <button class="btn-add" onclick="addDynamicItem('list-filter-cols','filter')">
+          + Ajouter un filtre
+        </button>
+      </div>
+      
+      <div class="config-buttons">
+        <button id="btn-config-cancel">Annuler</button>
+        <button id="btn-config-save">💾 Enregistrer</button>
+      </div>
     </div>
-    
-    <div class="config-row">
-      <label>Colonne coordonnées</label>
-      <input id="cfg-coords" placeholder="ex: coordonnees">
-    </div>
-    
-    <div class="config-row">
-      <label>Colonne titre</label>
-      <input id="cfg-title" placeholder="ex: nom">
-    </div>
-    
-    <h3>Colonnes d'information</h3>
-    <div id="info-list" class="dynamic-list"></div>
-    
-    <button id="btn-add">Ajouter une colonne</button>
-    <br>
-    <button id="btn-save">Enregistrer configuration</button>
   </div>
 
   <script>
-    /***************************************************************
-     CONFIGURATION PAR DÉFAUT
-     Cette structure sera sauvegardée dans les options GRIST
-    ***************************************************************/
+    /* ============================================================ 
+       CONFIGURATION 
+       ============================================================ */
     let config = {
-      tableId: "",
-      colCoords: "",
-      colTitle: "",
-      infoCols: []
+      tableId: '',
+      colCoords: '',
+      colTitle: '',
+      colRegion: '',
+      colDept: '',
+      infoCols: [],
+      filterCols: []
     };
 
-    /***************************************************************
-     AFFICHAGE D'UN MESSAGE D'ÉTAT
-    ***************************************************************/
-    function setStatus(message) {
-      document.getElementById("status").textContent = message;
+    /* ============================================================ 
+       GESTION DU PANNEAU DE CONFIGURATION 
+       ============================================================ */
+    function openConfigPanel() {
+      document.getElementById('cfg-table').value = config.tableId || '';
+      document.getElementById('cfg-col-coords').value = config.colCoords || '';
+      document.getElementById('cfg-col-title').value = config.colTitle || '';
+      document.getElementById('cfg-col-region').value = config.colRegion || '';
+      document.getElementById('cfg-col-dept').value = config.colDept || '';
+      
+      renderDynamicList('list-info-cols', 'info', config.infoCols);
+      renderDynamicList('list-filter-cols', 'filter', config.filterCols);
+      
+      document.getElementById('config-panel').style.display = 'flex';
     }
 
-    /***************************************************************
-     AJOUTER UNE LIGNE DANS LA LISTE DES COLONNES INFO
-    ***************************************************************/
-    function addInfoColumn(value = "") {
-      const container = document.getElementById("info-list");
-      const row = document.createElement("div");
-      row.className = "dynamic-item";
+    function closeConfigPanel() {
+      document.getElementById('config-panel').style.display = 'none';
+    }
+
+    /* ============================================================ 
+       LISTES DYNAMIQUES 
+       ============================================================ */
+    function renderDynamicList(containerId, type, values) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      (values || []).forEach(val => {
+        addDynamicItemWithValue(containerId, type, val);
+      });
+    }
+
+    function addDynamicItem(containerId, type) {
+      addDynamicItemWithValue(containerId, type, '');
+    }
+
+    function addDynamicItemWithValue(containerId, type, value) {
+      const container = document.getElementById(containerId);
+      const item = document.createElement('div');
+      item.className = 'dynamic-item';
       
-      const input = document.createElement("input");
+      const input = document.createElement('input');
+      input.type = 'text';
       input.value = value;
-      input.placeholder = "nom de colonne";
       
-      const del = document.createElement("button");
-      del.textContent = "X";
-      del.onclick = () => {
-        row.remove();
-      };
+      const btnDel = document.createElement('button');
+      btnDel.textContent = '✕';
+      btnDel.onclick = () => item.remove();
       
-      row.appendChild(input);
-      row.appendChild(del);
-      container.appendChild(row);
+      item.appendChild(input);
+      item.appendChild(btnDel);
+      container.appendChild(item);
     }
 
-    /***************************************************************
-     LIRE LES COLONNES INFO DEPUIS L'INTERFACE
-    ***************************************************************/
-    function readInfoColumns() {
-      try {
-        const inputs = document.querySelectorAll("#info-list input");
-        return Array.from(inputs)
-          .map(i => i.value.trim())
-          .filter(v => v.length > 0);
-      } catch(err) {
-        console.error("Erreur lecture colonnes info", err);
-        return [];
-      }
+    function readDynamicList(containerId) {
+      return Array.from(
+        document.querySelectorAll(`#${containerId} .dynamic-item input`)
+      )
+      .map(inp => inp.value.trim())
+      .filter(Boolean);
     }
 
-    /***************************************************************
-     CHARGER LA CONFIGURATION DANS L'INTERFACE
-    ***************************************************************/
-    function loadConfigUI() {
-      try {
-        document.getElementById("cfg-table").value = config.tableId || "";
-        document.getElementById("cfg-coords").value = config.colCoords || "";
-        document.getElementById("cfg-title").value = config.colTitle || "";
-        
-        const container = document.getElementById("info-list");
-        container.innerHTML = "";
-        
-        if (config.infoCols && config.infoCols.length > 0) {
-          config.infoCols.forEach(col => {
-            addInfoColumn(col);
-          });
-        }
-      } catch(err) {
-        console.error("Erreur chargement interface", err);
-        setStatus("Erreur chargement configuration.");
-      }
-    }
-
-    /***************************************************************
-     SAUVEGARDER LA CONFIGURATION
-    ***************************************************************/
-    async function saveConfig() {
-      try {
-        const newConfig = {
-          tableId: document.getElementById("cfg-table").value.trim(),
-          colCoords: document.getElementById("cfg-coords").value.trim(),
-          colTitle: document.getElementById("cfg-title").value.trim(),
-          infoCols: readInfoColumns()
-        };
-        
-        if (!newConfig.tableId) {
-          alert("Le nom de la table est obligatoire.");
-          return;
-        }
-        
-        config = newConfig;
-        await grist.setOptions(config);
-        setStatus("Configuration enregistrée.");
-      } catch(err) {
-        console.error("Erreur sauvegarde configuration", err);
-        setStatus("Erreur lors de la sauvegarde.");
-      }
-    }
-
-    /***************************************************************
-     RÉCEPTION DES OPTIONS GRIST
-    ***************************************************************/
-    function onOptions(options) {
-      try {
-        if (options) {
-          config = Object.assign(config, options);
-        }
-        loadConfigUI();
-      } catch(err) {
-        console.error("Erreur lecture options", err);
-        setStatus("Erreur chargement options.");
-      }
-    }
-
-    /***************************************************************
-     ÉVÉNEMENTS BOUTONS
-    ***************************************************************/
-    document.getElementById("btn-add").onclick = () => {
-      addInfoColumn();
-    };
-    
-    document.getElementById("btn-save").onclick = saveConfig;
-
-    /***************************************************************
-     INITIALISATION GRIST
-    ***************************************************************/
-    grist.ready({
-      requiredAccess: "read table",
-      onEditOptions: () => {
-        setStatus("Mode configuration activé.");
-      }
-    });
-
-    grist.onOptions(options => {
-      onOptions(options);
-    });
-  </script>
-  
-</body>
-</html>
+    /* ============================================================
