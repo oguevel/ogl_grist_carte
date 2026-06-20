@@ -1,0 +1,294 @@
+/* ============================================================
+   MAIN.CSS — Styles généraux du widget Carte IGN
+   Couvre : reset, layout, barre de filtres, carte,
+            cartouche info, loader, légende, message d'état
+============================================================ */
+
+/* ------------------------------------------------------------
+   RESET ET BASE
+------------------------------------------------------------ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: #f0f2f5;
+}
+
+/* ------------------------------------------------------------
+   BARRE DE FILTRES (en-tête horizontal)
+   Contient les groupes de filtres générés dynamiquement
+   ainsi que les boutons Reset et Mettre à jour
+------------------------------------------------------------ */
+#filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #ffffff;
+  border-bottom: 2px solid #dde3ea;
+  z-index: 1000;
+  min-height: 60px;
+}
+
+/* Groupe filtre individuel : label + select multiple */
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  max-width: 220px;
+}
+
+.filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5a6a7a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+
+/* Select multiple : hauteur fixe pour indiquer visuellement
+   le mode multi-sélection (affiche ~4 options) */
+.filter-group select {
+  padding: 4px 6px;
+  border: 1px solid #c0cad6;
+  border-radius: 5px;
+  font-size: 12px;
+  background: #f8fafc;
+  color: #2d3a45;
+  height: 80px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.filter-group select:focus {
+  border-color: #4a90d9;
+  background: #fff;
+}
+
+/* Bouton principal : mise à jour de la carte */
+#btn-update {
+  padding: 8px 18px;
+  background: linear-gradient(135deg, #4a90d9, #2c6fad);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-end;
+  transition: background 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+#btn-update:hover  { background: linear-gradient(135deg, #357abd, #1a5a9a); }
+#btn-update:active { transform: scale(0.97); }
+
+/* Bouton secondaire : reset des filtres */
+#btn-reset {
+  padding: 8px 14px;
+  background: #e8ecf0;
+  color: #5a6a7a;
+  border: 1px solid #c0cad6;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  align-self: flex-end;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+#btn-reset:hover { background: #d0d8e0; }
+
+/* Message affiché quand aucun filtre n'est configuré */
+#no-filter-msg {
+  font-size: 12px;
+  color: #8a9ab0;
+  font-style: italic;
+  align-self: center;
+}
+
+/* ------------------------------------------------------------
+   CONTENEUR CARTE
+   Occupe tout l'espace restant sous la barre de filtres
+------------------------------------------------------------ */
+#map-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+/* ------------------------------------------------------------
+   CARTOUCHE D'INFORMATION
+   Overlay positionné en haut à droite de la carte.
+   Affiché au clic sur une épingle (marker Leaflet).
+------------------------------------------------------------ */
+#info-card {
+  display: none; /* Rendu visible par showInfoCard() dans map.js */
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1500;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+  padding: 16px 18px;
+  min-width: 220px;
+  max-width: 320px;
+  border-left: 5px solid #4a90d9;
+}
+
+#info-card h3 {
+  font-size: 15px;
+  color: #1a2a3a;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #e8ecf0;
+  padding-bottom: 6px;
+}
+
+/* Ligne label / valeur dans le cartouche */
+#info-card .info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 5px;
+  gap: 8px;
+}
+
+#info-card .info-label {
+  color: #7a8a9a;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+#info-card .info-value {
+  color: #2d3a45;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* Bouton de fermeture du cartouche */
+#info-card-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #8a9ab0;
+}
+
+#info-card-close:hover { color: #2d3a45; }
+
+/* ------------------------------------------------------------
+   INDICATEUR DE CHARGEMENT (spinner)
+   Overlay semi-transparent sur la carte pendant les
+   opérations asynchrones (fetch GeoJSON, fetchTable…)
+------------------------------------------------------------ */
+#loader {
+  display: none; /* Activé via la classe CSS 'visible' */
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.7);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+  font-size: 15px;
+  color: #4a90d9;
+  font-weight: 600;
+  gap: 10px;
+}
+
+#loader.visible { display: flex; }
+
+/* Animation de rotation du spinner */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #c0d8f0;
+  border-top-color: #4a90d9;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------
+   LÉGENDE DES DÉPARTEMENTS
+   Contrôle Leaflet personnalisé (coin bas-gauche)
+------------------------------------------------------------ */
+.legend-control {
+  background: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 11px;
+  max-width: 180px;
+}
+
+.legend-control h4 {
+  font-size: 11px;
+  font-weight: 700;
+  color: #3a4a5a;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+
+/* Carré de couleur dans la légende */
+.legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------
+   MESSAGE D'ÉTAT TRANSITOIRE
+   Pastille centrée en bas de carte (4 secondes par défaut)
+------------------------------------------------------------ */
+#status-msg {
+  display: none; /* Géré par showStatus() dans app.js */
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;
+  background: rgba(42,54,66,0.85);
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 12px;
+  white-space: nowrap;
+}
