@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Carte IGN - Widget GRIST</title>
+
+  <!-- ================================================
+       DÉPENDANCES EXTERNES
+       - Leaflet 1.9.4  : moteur de rendu cartographique
+       - GRIST Plugin API : communication bidirectionnelle
+                           avec le document GRIST hôte
+  ================================================ -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+  <!-- ================================================
+       FEUILLES DE STYLE LOCALES
+       - main.css   : layout, carte, filtres, cartouche
+       - config.css : panneau de configuration
+  ================================================ -->
+  <link rel="stylesheet" href="css/main.css"/>
+  <link rel="stylesheet" href="css/config.css"/>
+</head>
+
+<body>
+
+  <!-- ================================================
+       BARRE DE FILTRES (en-tête)
+       Les groupes de filtres (.filter-group) sont
+       injectés dynamiquement par filters.js
+  ================================================ -->
+  <div id="filter-bar">
+    <!-- Message affiché tant qu'aucun filtre n'est configuré -->
+    <span id="no-filter-msg">Configurez le widget pour afficher les filtres</span>
+
+    <!-- Séparateur flexible pour pousser les boutons à droite -->
+    <div style="flex:1"></div>
+
+    <button id="btn-reset"  title="Réinitialiser tous les filtres">↺ Reset</button>
+    <button id="btn-update">🗺 Mettre à jour la carte</button>
+  </div>
+
+  <!-- ================================================
+       CONTENEUR PRINCIPAL DE LA CARTE
+  ================================================ -->
+  <div id="map-container">
+
+    <!-- Cible de rendu Leaflet -->
+    <div id="map"></div>
+
+    <!-- Indicateur de chargement (spinner) -->
+    <div id="loader">
+      <div class="spinner"></div>
+      Chargement des données…
+    </div>
+
+    <!-- Cartouche d'information du point sélectionné
+         Positionné en overlay sur la carte (coin haut-droit) -->
+    <div id="info-card">
+      <button id="info-card-close" title="Fermer">✕</button>
+      <h3 id="info-card-title">—</h3>
+      <div id="info-card-body"></div>
+    </div>
+
+    <!-- Message d'état transitoire (nombre de points, erreurs…) -->
+    <div id="status-msg"></div>
+
+  </div>
+
+  <!-- ================================================
+       PANNEAU DE CONFIGURATION
+       Affiché en overlay quand GRIST déclenche onEditOptions.
+       Géré par config.js
+  ================================================ -->
+  <div id="config-panel">
+    <div id="config-box">
+      <h2>⚙️ Configuration du widget Carte</h2>
+
+      <!-- --- Section : Colonnes de base --- -->
+      <div class="config-section">
+        <h4>Colonnes de base</h4>
+
+        <div class="config-row">
+          <label for="cfg-table">Nom de la table liée</label>
+          <input type="text" id="cfg-table" placeholder="ex: Etablissements"/>
+        </div>
+
+        <div class="config-row">
+          <label for="cfg-col-coords">Colonne coordonnées (format : lat,lon)</label>
+          <input type="text" id="cfg-col-coords" placeholder="ex: coordonnees"/>
+        </div>
+
+        <div class="config-row">
+          <label for="cfg-col-title">Colonne titre de l'épingle</label>
+          <input type="text" id="cfg-col-title" placeholder="ex: nom"/>
+        </div>
+
+        <div class="config-row">
+          <label for="cfg-col-region">Colonne régions</label>
+          <input type="text" id="cfg-col-region" placeholder="ex: region"/>
+        </div>
+
+        <div class="config-row">
+          <label for="cfg-col-dept">Colonne départements</label>
+          <input type="text" id="cfg-col-dept" placeholder="ex: departement"/>
+        </div>
+      </div>
+
+      <!-- --- Section : Variables du cartouche info --- -->
+      <div class="config-section">
+        <h4>Variables affichées dans le cartouche (0 à N)</h4>
+        <div class="dynamic-list" id="list-info-cols"></div>
+        <button class="btn-add" id="btn-add-info">+ Ajouter une variable</button>
+      </div>
+
+      <!-- --- Section : Colonnes de filtres --- -->
+      <div class="config-section">
+        <h4>Variables utilisées comme filtres (0 à N)</h4>
+        <div class="dynamic-list" id="list-filter-cols"></div>
+        <button class="btn-add" id="btn-add-filter">+ Ajouter un filtre</button>
+      </div>
+
+      <!-- --- Boutons de validation --- -->
+      <div class="config-buttons">
+        <button id="btn-config-cancel">Annuler</button>
+        <button id="btn-config-save">💾 Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================
+       SCRIPTS APPLICATIFS
+       Ordre de chargement important :
+       1. config.js  – état global + helpers config
+       2. filters.js – barre de filtres
+       3. map.js     – carte Leaflet
+       4. app.js     – point d'entrée + GRIST API
+  ================================================ -->
+  <script src="js/config.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
