@@ -1,0 +1,161 @@
+/* ============================================================
+   CONFIG.CSS — Styles du panneau de configuration
+   Affiché en overlay modal quand GRIST déclenche onEditOptions.
+   Géré par config.js
+============================================================ */
+
+/* ------------------------------------------------------------
+   OVERLAY DE FOND (fond sombre semi-transparent)
+------------------------------------------------------------ */
+#config-panel {
+  display: none; /* Activé via la classe CSS 'visible' */
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 3000;
+  justify-content: center;
+  align-items: center;
+}
+
+#config-panel.visible { display: flex; }
+
+/* ------------------------------------------------------------
+   BOÎTE DE DIALOGUE DE CONFIGURATION
+------------------------------------------------------------ */
+#config-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: 560px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+}
+
+#config-box h2 {
+  font-size: 17px;
+  color: #1a2a3a;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------
+   SECTIONS DE CONFIGURATION
+   Chaque section regroupe des champs liés (colonnes de base,
+   variables cartouche, colonnes filtres)
+------------------------------------------------------------ */
+.config-section {
+  margin-bottom: 18px;
+}
+
+.config-section h4 {
+  font-size: 12px;
+  color: #4a90d9;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #e8ecf0;
+  padding-bottom: 4px;
+}
+
+/* Ligne de formulaire individuelle */
+.config-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+
+.config-row label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5a6a7a;
+  margin-bottom: 3px;
+}
+
+.config-row input,
+.config-row select {
+  padding: 7px 10px;
+  border: 1px solid #c0cad6;
+  border-radius: 5px;
+  font-size: 13px;
+  color: #2d3a45;
+  outline: none;
+}
+
+.config-row input:focus { border-color: #4a90d9; }
+
+/* ------------------------------------------------------------
+   LISTES DYNAMIQUES (infoCols et filterCols)
+   Chaque item est une ligne avec un champ texte + bouton suppr
+------------------------------------------------------------ */
+.dynamic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dynamic-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dynamic-item input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #c0cad6;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+/* Bouton suppression d'un item de liste */
+.dynamic-item button {
+  background: #fdecea;
+  border: none;
+  border-radius: 4px;
+  color: #c0392b;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+/* Bouton d'ajout d'un item de liste */
+.btn-add {
+  background: #eaf3fb;
+  border: 1px dashed #4a90d9;
+  border-radius: 5px;
+  color: #4a90d9;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 5px 10px;
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+.btn-add:hover { background: #d0e8f8; }
+
+/* ------------------------------------------------------------
+   BOUTONS DE VALIDATION (Annuler / Enregistrer)
+------------------------------------------------------------ */
+.config-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.config-buttons button {
+  padding: 9px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+#btn-config-save   { background: linear-gradient(135deg, #4a90d9, #2c6fad); color: #fff; }
+#btn-config-cancel { background: #e8ecf0; color: #5a6a7a; }
