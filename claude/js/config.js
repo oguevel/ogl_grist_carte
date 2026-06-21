@@ -52,11 +52,11 @@ function closeConfigPanel() {
   document.getElementById('config-panel').classList.remove('visible');
 }
 
-/* ============================================================
-   SAUVEGARDE DE LA CONFIGURATION
-   Lit les champs du formulaire, valide, met à jour `config`
-   et persiste dans les options GRIST via grist.setOptions()
-============================================================ */
+/**
+ * Sauvegarder la configuration dans les options GRIST.
+ * Réinitialise les flags de synchronisation pour forcer
+ * un rechargement complet des données avec la nouvelle config.
+ */
 async function saveConfig() {
   const newConfig = {
     tableId   : document.getElementById('cfg-table').value.trim(),
@@ -68,25 +68,28 @@ async function saveConfig() {
     filterCols: readDynamicList('list-filter-cols')
   };
 
-  // Validation minimale : la table est obligatoire
   if (!newConfig.tableId) {
     alert('Le nom de la table est requis.');
     return;
   }
 
-  // Mettre à jour l'objet global partagé entre les modules
   Object.assign(config, newConfig);
 
-  // Persister dans GRIST (sera renvoyé via onOptions au rechargement)
+  // Réinitialiser les flags : la nouvelle config peut pointer vers
+  // une table différente → les données doivent être rechargées.
+  // onOptions sera déclenché par grist.setOptions() et relancera
+  // le cycle complet de chargement via onGristOptions().
+  _optionsReady = false;
+  _recordsReady = false;
+
   await grist.setOptions(config);
 
   closeConfigPanel();
 
-  // Reconstruire la barre de filtres avec la nouvelle configuration
-  buildFilterBar();
-  showStatus('Configuration sauvegardée. Sélectionnez des filtres puis mettez à jour la carte.');
+  // Note : buildFilterBar() sera appelé par tryBuildFilterBar()
+  // après que onOptions + fetchTable soient revenus.
+  showStatus('Configuration sauvegardée, rechargement en cours…');
 }
-
 /* ============================================================
    LISTES DYNAMIQUES — RENDU
    Vide le conteneur et reconstruit chaque item à partir
