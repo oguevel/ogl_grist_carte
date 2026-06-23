@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Carte IGN - Widget GRIST</title>
+
+  <!-- ======================================================
+       DÉPENDANCES EXTERNES
+       - Leaflet : bibliothèque JavaScript de rendu cartographique interactif
+       - GRIST Plugin API : bibliothèque de communication bidirectionnelle avec l'application GRIST
+  ====================================================== -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+  <style>
+    /* ======================================================
+       RESET ET BASE
+       Neutralise les marges/paddings par défaut des navigateurs
+       et définit la police globale de l'application
+    ====================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    /* Mise en page verticale pleine hauteur sans défilement global */
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      background: #f0f2f5;
+    }
+
+    /* ======================================================
+       BARRE DE FILTRES EN HAUT
+       Bandeau horizontal fixe accueillant les contrôles de filtrage
+    ====================================================== */
+    #filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #ffffff;
+      border-bottom: 2px solid #dde3ea;
+      z-index: 1000;
+      min-height: 60px;
+    }
+
+    /* Conteneur vertical regroupant un label et son select associé */
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      min-width: 150px;
+      max-width: 220px;
+    }
+
+    /* Étiquette texte au-dessus de chaque liste déroulante de filtre */
+    .filter-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #5a6a7a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+
+    /* Liste déroulante multi-sélection stylisée avec hauteur fixe
+       pour signaler visuellement la possibilité de sélection multiple */
+    .filter-group select {
+      padding: 4px 6px;
+      border: 1px solid #c0cad6;
+      border-radius: 5px;
+      font-size: 12px;
+      background: #f8fafc;
+      color: #2d3a45;
+      height: 80px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    /* Mise en évidence du select actif avec un contour bleu */
+    .filter-group select:focus {
+      border-color: #4a90d9;
+      background: #fff;
+    }
+
+    /* Bouton principal déclenchant le rendu cartographique */
+    #btn-update {
+      padding: 8px 18px;
+      background: linear-gradient(135deg, #4a90d9, #2c6fad);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      align-self: flex-end;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    /* Assombrissement du bouton de mise à jour au survol */
+    #btn-update:hover {
+      background: linear-gradient(135deg, #357abd, #1a5a9a);
+    }
+
+    /* Effet d'enfoncement du bouton au clic */
+    #btn-update:active {
+      transform: scale(0.97);
+    }
+
+    /* Bouton secondaire permettant de réinitialiser tous les filtres */
+    #btn-reset {
+      padding: 8px 14px;
+      background: #e8ecf0;
+      color: #5a6a7a;
+      border: 1px solid #c0cad6;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      align-self: flex-end;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    /* Assombrissement du bouton reset au survol */
+    #btn-reset:hover {
+      background: #d0d8e0;
+    }
+
+    /* Message informatif affiché quand aucun filtre n'est encore configuré */
+    #no-filter-msg {
+      font-size: 12px;
+      color: #8a9ab0;
+      font-style: italic;
+      align-self: center;
+    }
+
+    /* ======================================================
+       CONTENEUR CARTE
+       Zone flexible occupant tout l'espace restant sous la barre de filtres
+    ====================================================== */
+    #map-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Surface de rendu Leaflet couvrant intégralement son conteneur */
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ======================================================
+       CARTOUCHE D'INFORMATION (panneau custom)
+       Panneau flottant en haut à droite affichant les détails
+       de l'épingle sélectionnée sur la carte
+    ====================================================== */
+    #info-card {
+      display: none;
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 1500;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+      padding: 16px 18px;
+      min-width: 220px;
+      max-width: 320px;
+      border-left: 5px solid #4a90d9;
+    }
+
+    /* Titre principal du cartouche avec séparateur bas */
+    #info-card h3 {
+      font-size: 15px;
+      color: #1a2a3a;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #e8ecf0;
+      padding-bottom: 6px;
+    }
+
+    /* Ligne d'information alignant label et valeur en opposition */
+    #info-card .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 5px;
+      gap: 8px;
+    }
+
+    /* Étiquette de champ en petites capitales dans le cartouche */
+    #info-card .info-label {
+      color: #7a8a9a;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+    }
+
+    /* Valeur de champ alignée à droite dans le cartouche */
+    #info-card .info-value {
+      color: #2d3a45;
+      font-weight: 500;
+      text-align: right;
+    }
+
+    /* Bouton de fermeture positionné en haut à droite du cartouche */
+    #info-card-close {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      color: #8a9ab0;
+    }
+
+    /* Assombrissement de la croix de fermeture au survol */
+    #info-card-close:hover {
+      color: #2d3a45;
+    }
+
+    /* ======================================================
+       PANNEAU DE CONFIGURATION
+       Fenêtre modale en superposition activée depuis les options GRIST
+       pour paramétrer les colonnes et filtres du widget
+    ====================================================== */
+    #config-panel {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);  /* Fond semi-transparent bloquant l'interface */
+      z-index: 3000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Classe CSS ajoutée par JS pour rendre la modale visible */
+    #config-panel.visible {
+      display: flex;
+    }
+
+    /* Boîte blanche centrale scrollable contenant les champs de configuration */
+    #config-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px 32px;
+      width: 560px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+    }
+
+    /* Titre de la modale de configuration avec icône */
+    #config-box h2 {
+      font-size: 17px;
+      color: #1a2a3a;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Section thématique regroupant des champs de configuration liés */
+    .config-section {
+      margin-bottom: 18px;
+    }
+
+    /* En-tête de section avec soulignement et couleur bleue distinctive */
+    .config-section h4 {
+      font-size: 12px;
+      color: #4a90d9;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #e8ecf0;
+      padding-bottom: 4px;
+    }
+
+    /* Ligne de configuration verticale associant un label à un champ de saisie */
+    .config-row {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 10px;
+    }
+
+    /* Étiquette de champ de configuration */
+    .config-row label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #5a6a7a;
+      margin-bottom: 3px;
+    }
+
+    /* Champs input et select uniformisés dans le panneau de configuration */
+    .config-row input,
+    .config-row select {
+      padding: 7px 10px;
+      border: 1px solid #c0cad6;
+      border-radius: 5px;
+      font-size: 13px;
+      color: #2d3a45;
+      outline: none;
+    }
+
+    /* Mise en évidence du champ de saisie actif dans la configuration */
+    .config-row input:focus {
+      border-color: #4a90d9;
+    }
+
+    /* Zone conteneur des listes dynamiques (colonnes d'info et de filtres) */
+    .dynamic-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Ligne d'item dynamique alignant un champ texte et son bouton de suppression */
+    .dynamic-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Champ de saisie extensible pour le nom d'une colonne dynamique */
+    .dynamic-item input {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #c0cad6;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+
+    /* Bouton de suppression d'un item dynamique avec fond rouge pâle */
+    .dynamic-item button {
+      background: #fdecea;
+      border: none;
+      border-radius: 4px;
+      color: #c0392b;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+
+    /* Bouton d'ajout en pointillés pour indiquer l'action d'extension de liste */
+    .btn-add {
+      background: #eaf3fb;
+      border: 1px dashed #4a90d9;
+      border-radius: 5px;
+      color: #4a90d9;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 5px 10px;
+      margin-top: 4px;
+      align-self: flex-start;
+    }
+
+    /* Assombrissement du bouton d'ajout au survol */
+    .btn-add:hover {
+      background: #d0e8f8;
+    }
+
+    /* Zone de boutons d'action alignés à droite en bas de la modale */
+    .config-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    /* Style commun aux boutons d'action de la modale */
+    .config-buttons button {
+      padding: 9px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+    }
+
+    /* Bouton de sauvegarde en bleu dégradé */
+    #btn-config-save {
+      background: linear-gradient(135deg, #4a90d9, #2c6fad);
+      color: #fff;
+    }
+
+    /* Bouton d'annulation en gris neutre */
+    #btn-config-cancel {
+      background: #e8ecf0;
+      color: #5a6a7a;
+    }
+
+    /* ======================================================
+       INDICATEUR DE CHARGEMENT
+       Superposition blanche semi-transparente avec spinner animé
+       bloquant l'interface pendant les opérations asynchrones
+    ====================================================== */
+    #loader {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.7);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      font-size: 15px;
+      color: #4a90d9;
+      font-weight: 600;
+      gap: 10px;
+    }
+
+    /* Classe CSS ajoutée par JS pour afficher le loader */
+    #loader.visible {
+      display: flex;
+    }
+
+    /* Cercle tournant formant l'animation de chargement */
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid #c0d8f0;
+      border-top-color: #4a90d9;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* Animation de rotation continue du spinner */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ======================================================
+       LÉGENDE DES DÉPARTEMENTS
+       Contrôle Leaflet personnalisé scrollable affiché en bas à gauche
+    ====================================================== */
+    .legend-control {
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 11px;
+      max-width: 180px;
+    }
+
+    /* Titre de la légende en petites capitales */
+    .legend-control h4 {
+      font-size: 11px;
+      font-weight: 700;
+      color: #3a4a5a;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    /* Ligne de légende associant un carré de couleur à un nom de département */
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 3px;
+    }
+
+    /* Carré coloré représentant la couleur du département dans la légende */
+    .legend-color {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(0,0,0,0.15);
+      flex-shrink: 0;
+    }
+
+    /* ======================================================
+       MESSAGE D'ÉTAT
+       Bandeau flottant centré en bas de carte pour les notifications
+       transitoires (nb de points, erreurs, instructions)
+    ====================================================== */
+    #status-msg {
+      display: none;
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1500;
+      background: rgba(42,54,66,0.85);
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ======================================================
+       BARRE DE FILTRES
+       Bandeau supérieur recevant les selects de filtrage injectés dynamiquement par JS
+  ====================================================== -->
+  <div id="filter-bar">
+    <!-- Les filtres seront injectés dynamiquement par JS -->
+    <span id="no-filter-msg">Configurez le widget pour afficher les filtres</span>
+    <div style="flex:1"></div>  <!-- Séparateur flexible repoussant les boutons vers la droite -->
+    <button id="btn-reset" title="Réinitialiser tous les filtres">↺ Reset</button>
+    <button id="btn-update">🗺 Mettre à jour la carte</button>
+  </div>
+
+  <!-- ======================================================
+       CARTE PRINCIPALE
+       Conteneur flex occupant tout l'espace restant,
+       hébergeant la carte Leaflet et les éléments superposés
+  ====================================================== -->
+  <div id="map-container">
+    <!-- Surface de rendu de la carte Leaflet -->
+    <div id="map"></div>
+
+    <!-- Superposition blanche avec spinner pendant les chargements asynchrones -->
+    <div id="loader">
+      <div class="spinner"></div>
+      Chargement des données…
+    </div>
+
+    <!-- Panneau latéral d'information affiché au clic sur une épingle -->
+    <div id="info-card">
+      <button id="info-card-close" title="Fermer">✕</button>
+      <h3 id="info-card-title">—</h3>
+      <div id="info-card-body"></div>
+    </div>
+
+    <!-- Notification transitoire centrée en bas de carte -->
+    <!-- Note : attribut id="status-msg" en double, le second est ignoré par le navigateur -->
+    <div id="status-msg" id="status-msg"></div>
+  </div>
+
+  <!-- ======================================================
+       PANNEAU DE CONFIGURATION
+       Modale plein écran activée par GRIST en mode édition des options,
+       permettant de configurer les colonnes et filtres du widget
+  ====================================================== -->
+  <div id="config-panel">
+    <div id="config-box">
+      <h2>⚙️ Configuration du widget Carte</h2>
+
+      <!-- Section des colonnes obligatoires du widget -->
+      <div class="config-section">
+        <h4>Colonnes de base</h4>
+
+        <!-- Champ de saisie du nom de la table GRIST source des données -->
+        <div class="config-row">
+          <label>Nom de la table liée</label>
+          <input type="text" id="cfg-table" placeholder="ex: Etablissements"/>
+        </div>
+
+        <!-- Champ de saisie de la colonne contenant les coordonnées géographiques -->
+        <div class="config-row">
+          <label>Colonne coordonnées (format: lat,lon)</label>
+          <input type="text" id="cfg-col-coords" placeholder="ex: coordonnees"/>
+        </div>
+
+        <!-- Champ de saisie de la colonne utilisée comme titre des épingles -->
+        <div class="config-row">
+          <label>Colonne titre de l'épingle</label>
+          <input type="text" id="cfg-col-title" placeholder="ex: nom"/>
+        </div>
+
+        <!-- Champ de saisie de la colonne région pour le filtre géographique -->
+        <div class="config-row">
+          <label>Colonne régions</label>
+          <input type="text" id="cfg-col-region" placeholder="ex: region"/>
+        </div>
+
+        <!-- Champ de saisie de la colonne département pour le filtre et le coloriage -->
+        <div class="config-row">
+          <label>Colonne départements</label>
+          <input type="text" id="cfg-col-dept" placeholder="ex: departement"/>
+        </div>
+      </div>
+
+      <!-- Section de configuration des colonnes affichées dans le cartouche d'info -->
+      <div class="config-section">
+        <h4>Variables affichées dans le cartouche (0 à N)</h4>
+        <!-- Zone injectée dynamiquement avec addDynamicItemWithValue() -->
+        <div class="dynamic-list" id="list-info-cols"></div>
+        <!-- Appel direct JS : ajoute un item vide dans la liste des colonnes d'info -->
+        <button class="btn-add" onclick="addDynamicItem('list-info-cols', 'info')">
+          + Ajouter une variable
+        </button>
+      </div>
+
+      <!-- Section de configuration des colonnes utilisées comme filtres -->
+      <div class="config-section">
+        <h4>Variables utilisées comme filtres (0 à N)</h4>
+        <!-- Zone injectée dynamiquement avec addDynamicItemWithValue() -->
+        <div class="dynamic-list" id="list-filter-cols"></div>
+        <!-- Appel direct JS : ajoute un item vide dans la liste des filtres -->
+        <button class="btn-add" onclick="addDynamicItem('list-filter-cols', 'filter')">
+          + Ajouter un filtre
+        </button>
+      </div>
+
+      <!-- Boutons d'action de la modale de configuration -->
+      <div class="config-buttons">
+        <button id="btn-config-cancel">Annuler</button>
+        <button id="btn-config-save">💾 Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ============================================================
+  //  WIDGET GRIST - CARTE IGN INTERACTIVE
+  //
+  //  Flux général :
+  //  1. GRIST transmet les options et les données de la table
+  //  2. L'utilisateur sélectionne des valeurs dans les filtres
+  //  3. Les filtres se mettent à jour en cascade (reactiveFilters)
+  //  4. "Mettre à jour la carte" dessine les marqueurs et les
+  //     contours des départements concernés
+  //  5. Un clic sur une épingle ouvre le cartouche d'info
+  // ============================================================
+
+  // ------------------------------------------------------------
+  //  CONFIGURATION PAR DÉFAUT
+  //  Stockée dans les options GRIST (grist.setOptions / getOptions)
+  // ------------------------------------------------------------
+  let config = {
+    tableId    : '',        // ID / nom de la table GRIST
+    colCoords  : '',        // colonne "lat,lon"
+    colTitle   : '',        // colonne titre épingle
+    colRegion  : '',        // colonne région
+    colDept    : '',        // colonne département
+    infoCols   : [],        // colonnes affichées dans le cartouche
+    filterCols : []         // colonnes servant de filtres
+  };
+
+  // ------------------------------------------------------------
+  //  ÉTAT DE L'APPLICATION
+  //  Variables globales maintenant l'état courant du widget
+  // ------------------------------------------------------------
+  let allRecords      = [];   // Tous les enregistrements reçus de GRIST
+  let filteredRecords = [];   // Enregistrements après application des filtres
+  let deptGeoJSON     = null; // GeoJSON des contours des départements (chargé 1 fois)
+  let map             = null; // Instance Leaflet
+  let markersLayer    = null; // Couche Leaflet des marqueurs
+  let deptLayer       = null; // Couche Leaflet des départements colorés
+  let legendControl   = null; // Contrôle de légende Leaflet
+
+  // Palette de 20 couleurs pastel distinctes attribuées en rotation aux départements
+  const PASTEL_COLORS = [
+    '#FFB3BA','#FFDFBA','#FFFFBA','#BAFFC9','#BAE1FF',
+    '#E8BAFF','#FFD9BA','#BAFFEE','#FFE4BA','#D4BAFF',
+    '#C9F0FF','#FFC9E3','#D4FFD4','#FFE8C9','#C9D4FF',
+    '#FFF0C9','#C9FFE5','#FFD4D4','#D4F0FF','#F0D4FF'
+  ];
+
+  // Dictionnaire de correspondance code/nom de département → couleur pastel assignée
+  let deptColorMap = {};
+
+  // ============================================================
+  //  FONCTION 1 : initMap
+  //  Ordre d'exécution : 1 (appelée au démarrage)
+  // ============================================================
+  /**
+   * Objectif   : Initialise la carte Leaflet centrée sur la France avec le fond IGN
+   *              et crée les deux couches vides (marqueurs et départements).
+   * Entrée     : aucune
+   * Sortie     : aucune
+   * Globales   : map (L.Map), markersLayer (L.LayerGroup), deptLayer (L.LayerGroup)
+   *              sont initialisées et modifiées.
+   */
+  function initMap() {
+    // Centrage initial sur la France métropolitaine
+    map = L.map('map', {
+      center: [46.5, 2.5],
+      zoom: 6,
+      zoomControl: true
+    });
+
+    // ---- Fond de carte : IGN Géoportail (Plan IGN) ----
+    // On utilise le service WMTS public de l'IGN (sans clé API pour la couche plan)
+    // URL conforme aux CGU IGN pour usage non commercial / développement
+    L.tileLayer(
+      'https://wxs.ign.fr/essentiels/geoportail/wmts?' +
+      'SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
+      '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2' +
+      '&STYLE=normal&FORMAT=image/png' +
+      '&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+      {
+        attribution: '© <a href="https://www.ign.fr">IGN</a> - Géoportail',
+        minZoom: 2,
+        maxZoom: 18
+      }
+    ).addTo(map);
+
+    // Couches vides qui seront alimentées lors de updateMap()
+    markersLayer = L.layerGroup().addTo(map);
+    deptLayer    = L.layerGroup().addTo(map);
+
+    // Message initial centré sur la France
+    showStatus('Sélectionnez des filtres puis cliquez sur "Mettre à jour la carte"');
+  }
+
+  // ============================================================
+  //  FONCTION 2 : loadDeptGeoJSON
+  //  Ordre d'exécution : 2 (appelée au démarrage en arrière-plan,
+  //                         puis rappelée depuis updateMap si nécessaire)
+  // ============================================================
+  /**
+   * Objectif   : Charge en asynchrone le fichier GeoJSON des contours
+   *              des départements français depuis GitHub (une seule fois).
+   * Entrée     : aucune
+   * Sortie     : aucune (peuple la variable globale deptGeoJSON)
+   * Globales   : deptGeoJSON (Object|null) est lue (garde-fou) et écrite.
+   *              Appelle showLoader() [2.1] et showStatus() [2.2].
+   */
+  async function loadDeptGeoJSON() {
+    if (deptGeoJSON) return; // Déjà chargé, pas besoin de recharger
+
+    showLoader(true);       // 2.1
+    try {
+      // GeoJSON des départements français (métropole + DOM)
+      // Source : gregoiredavid/france-geojson (MIT License)
+      const resp = await fetch(
+        'https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson'
+      );
+      if (!resp.ok) throw new Error('Impossible de charger le GeoJSON des départements');
+      deptGeoJSON = await resp.json();
+    } catch(e) {
+      console.error('Erreur chargement GeoJSON dept:', e);
+      showStatus('Erreur : impossible de charger les contours des départements'); // 2.2
+    } finally {
+      showLoader(false);    // 2.1
+    }
+  }
+
+  // ============================================================
+  //  FONCTION 3 : updateMap
+  //  Ordre d'exécution : 3 (déclenchée par le clic sur #btn-update)
+  // ============================================================
+  /**
+   * Objectif   : Orchestre la mise à jour complète de la carte :
+   *              filtrage des données, chargement du GeoJSON si absent,
+   *              dessin des contours de départements et placement des marqueurs.
+   * Entrée     : aucune
+   * Sortie     : aucune
+   * Globales   : filteredRecords (Array), markersLayer (L.LayerGroup),
+   *              deptLayer (L.LayerGroup), deptColorMap (Object),
+   *              config (Object), map (L.Map) sont lues et/ou modifiées.
+   *
+   * Appels internes :
+   *   3.1  showLoader()
+   *   3.2  hideInfoCard()
+   *   3.3  applyCurrentFilters()
+   *   3.4  showStatus()
+   *   3.5  loadDeptGeoJSON()
+   *   3.6  collectDeptNames()
+   *   3.7  drawDepartements()
+   *   3.8  parseCoords()
+   *   3.9  showInfoCard()
+   *   3.10 updateLegend()
+   */
+  async function updateMap() {
+    showLoader(true);   // 3.1
+    hideInfoCard();     // 3.2
+
+    // Récupérer les enregistrements filtrés selon les selects actifs
+    filteredRecords = applyCurrentFilters(); // 3.3
+
+    if (filteredRecords.length === 0) {
+      showLoader(false);                                                        // 3.1
+      showStatus('Aucune donnée pour les filtres sélectionnés');               // 3.4
+      // Vider les couches
+      markersLayer.clearLayers();
+      deptLayer.clearLayers();
+      return;
+    }
+
+    // S'assurer que le GeoJSON des départements est chargé
+    await loadDeptGeoJSON(); // 3.5
+
+    // Reconstruire les couches
+    markersLayer.clearLayers();
+    deptLayer.clearLayers();
+    deptColorMap = {};
+
+    // --- 1. Identifier les départements concernés par les données filtrées ---
+    const deptNames = collectDeptNames(filteredRecords); // 3.6
+
+    // --- 2. Dessiner les contours de départements ---
+    drawDepartements(deptNames); // 3.7
+
+    // --- 3. Placer les marqueurs ---
+    const bounds = [];
+    filteredRecords.forEach(record => {
+      const coords = parseCoords(record[config.colCoords]); // 3.8
+      if (!coords) return; // Ignore les enregistrements sans coordonnées valides
+
+      bounds.push([coords.lat, coords.lon]);
+
+      // Titre de l'épingle
+      const title = record[config.colTitle] || 'Sans titre';
+
+      // Marqueur circulaire Leaflet avec style bleu
+      const marker = L.circleMarker([coords.lat, coords.lon], {
+        radius      : 7,
+        fillColor   : '#4a90d9',
+        color       : '#1a5a9a',
+        weight      : 2,
+        opacity     : 1,
+        fillOpacity : 0.85
+      });
+
+      // Infobulle légère au survol du marqueur
+      marker.bindTooltip(title, { permanent: false, direction: 'top' });
+
+      // Au clic → afficher le cartouche latéral
+      marker.on('click', () => showInfoCard(record)); // 3.9
+
+      markersLayer.addLayer(marker);
+    });
+
+    // --- 4. Recentrer la carte sur les données affichées ---
+    if (bounds.length > 0) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] });
+    }
+
+    // --- 5. Mettre à jour la légende ---
+    updateLegend(); // 3.10
+
+    showLoader(false);                                          // 3.1
+    showStatus(`${filteredRecords.length} point(s) affiché(s)`); // 3.4
+  }
+
+  // ============================================================
+  //  FONCTION 4 : drawDepartements
+  //  Ordre d'exécution : 4 (appelée depuis updateMap → 3.7)
+  // ============================================================
+  /**
+   * Objectif   : Dessine sur la carte les contours GeoJSON des départements
+   *              en coloriant ceux présents dans les données filtrées.
+   * Entrée     : deptNamesSet (Set<string>) — noms/codes de départements à colorier
+   * Sortie     : aucune
+   * Globales   : deptGeoJSON (Object), deptColorMap (Object), deptLayer (L.LayerGroup),
+   *              PASTEL_COLORS (Array) sont lues et/ou modifiées.
+   *
+   * Appels internes :
+   *   4.1  normalizeDeptName()
+   */
+  function drawDepartements(deptNamesSet) {
+    if (!deptGeoJSON) return;
+
+    // Attribuer une couleur pastel unique à chaque département présent dans les données
+    let colorIndex = 0;
+    deptNamesSet.forEach(name => {
+      deptColorMap[normalizeDeptName(name)] =   // 4.1
+        PASTEL_COLORS[colorIndex % PASTEL_COLORS.length];
+      colorIndex++;
+    });
+
+    // Parcourir le GeoJSON et colorier les départements concernés
+    L.geoJSON(deptGeoJSON, {
+      // Fonction de style : couleur pastel si département concerné,
+      // sinon transparent (pas de fond, juste un contour léger)
+      style: (feature) => {
+        // Le GeoJSON de gregoiredavid utilise :
+        //   feature.properties.code (ex: "75")
+        //   feature.properties.nom  (ex: "Paris")
+        const code    = feature.properties.code || '';
+        const nom     = feature.properties.nom  || '';
+        const normNom = normalizeDeptName(nom);   // 4.1
+        const normCode= normalizeDeptName(code);  // 4.1
+
+        // Chercher si ce département est dans nos données
+        // On teste à la fois le nom et le code
+        const color = deptColorMap[normNom] || deptColorMap[normCode] || null;
+
+        if (color) {
+          // Département avec données : fond coloré semi-transparent
+          return {
+            fillColor   : color,
+            fillOpacity : 0.45,
+            color       : '#555',
+            weight      : 1.5,
+            opacity     : 0.8
+          };
+        } else {
+          // Département sans données : contour très léger, pas de fond
+          return {
+            fillColor   : 'transparent',
+            fillOpacity : 0,
+            color       : '#bbb',
+            weight      : 0.5,
+            opacity     : 0.4
+          };
+        }
+      },
+
+      // Tooltip affiché au survol de chaque département (nom + code)
+      onEachFeature: (feature, layer) => {
+        const nom  = feature.properties.nom  || '';
+        const code = feature.properties.code || '';
+        layer.bindTooltip(`${nom} (${code})`, { sticky: true });
+      }
+    }).addTo(deptLayer);
+  }
+
+  // ============================================================
+  //  FONCTION 5 : collectDeptNames
+  //  Ordre d'exécution : 5 (appelée depuis updateMap → 3.6)
+  // ============================================================
+  /**
+   * Objectif   : Extrait l'ensemble des valeurs distinctes de la colonne département
+   *              depuis un tableau d'enregistrements.
+   * Entrée     : records (Array<Object>) — enregistrements filtrés
+   * Sortie     : Set<string> — ensemble des noms/codes de départements présents
+   * Globales   : config.colDept (string) est lue.
+   */
+  function collectDeptNames(records) {
+    const names = new Set();
+    if (!config.colDept) return names;
+
+    records.forEach(r => {
+      const val = r[config.colDept];
+      if (val) names.add(String(val).trim());
+    });
+    return names;
+  }
+
+  // ============================================================
+  //  FONCTION 6 : normalizeDeptName
+  //  Ordre d'exécution : 6 (appelée depuis drawDepartements → 4.1
+  //                         et updateLegend → 10.1)
+  // ============================================================
+  /**
+   * Objectif   : Normalise une chaîne de caractères représentant un nom
+   *              ou code de département pour faciliter les comparaisons
+   *              (suppression des accents, casse, tirets, espaces superflus).
+   * Entrée     : str (string) — nom ou code brut
+   * Sortie     : string — chaîne normalisée en minuscules sans accents
+   * Globales   : aucune.
+   */
+  function normalizeDeptName(str) {
+    return String(str)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Supprimer les accents (diacritiques Unicode)
+      .replace(/[-_\s]+/g, ' ')        // Remplacer tirets/underscores/espaces multiples par un espace
+      .trim();
+  }
+
+  // ============================================================
+  //  FONCTION 7 : parseCoords
+  //  Ordre d'exécution : 7 (appelée depuis updateMap → 3.8)
+  // ============================================================
+  /**
+   * Objectif   : Convertit une chaîne de coordonnées au format "lat,lon"
+   *              (ou séparateurs alternatifs) en un objet {lat, lon}.
+   * Entrée     : value (string|any) — valeur brute de la colonne coordonnées
+   * Sortie     : {lat: number, lon: number} | null — coordonnées parsées ou null si invalide
+   * Globales   : aucune.
+   */
+  function parseCoords(value) {
+    if (!value) return null;
+    const str = String(value).trim();
+    // Accepte : "48.8566, 2.3522" ou "48.8566;2.3522" ou "48.8566 2.3522"
+    const parts = str.split(/[,;|\s]+/).filter(Boolean);
+    if (parts.length < 2) return null;
+    const lat = parseFloat(parts[0]);
+    const lon = parseFloat(parts[1]);
+    if (isNaN(lat) || isNaN(lon)) return null;
+    // Validation des plages géographiques valides
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon };
+  }
+
+  // ============================================================
+  //  FONCTION 8 : showInfoCard
+  //  Ordre d'exécution : 8 (appelée depuis updateMap → 3.9, via event click)
+  // ============================================================
+  /**
+   * Objectif   : Affiche le cartouche d'information latéral en renseignant
+   *              le titre et les champs configurés pour l'enregistrement cliqué.
+   * Entrée     : record (Object) — enregistrement GRIST de l'épingle sélectionnée
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : config.colTitle (string), config.infoCols (Array<string>) sont lues.
+   */
+  function showInfoCard(record) {
+    const card  = document.getElementById('info-card');
+    const title = document.getElementById('info-card-title');
+    const body  = document.getElementById('info-card-body');
+
+    title.textContent = record[config.colTitle] || 'Information';
+    body.innerHTML = '';
+
+    // Afficher toutes les variables configurées dans infoCols
+    if (config.infoCols.length === 0) {
+      body.innerHTML = '<p style="color:#8a9ab0;font-size:12px">Aucune variable configurée</p>';
+    } else {
+      config.infoCols.forEach(col => {
+        if (!col) return;
+        const val = record[col] !== undefined ? record[col] : '—';
+        const row = document.createElement('div');
+        row.className = 'info-row';
+        row.innerHTML = `
+          <span class="info-label">${col}</span>
+          <span class="info-value">${val}</span>
+        `;
+        body.appendChild(row);
+      });
+    }
+
+    card.style.display = 'block';
+  }
+
+  // ============================================================
+  //  FONCTION 9 : hideInfoCard
+  //  Ordre d'exécution : 9 (appelée depuis updateMap → 3.2,
+  //                         resetFilters → 14.1, et event click #info-card-close)
+  // ============================================================
+  /**
+   * Objectif   : Masque le cartouche d'information latéral.
+   * Entrée     : aucune
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : aucune.
+   */
+  function hideInfoCard() {
+    document.getElementById('info-card').style.display = 'none';
+  }
+
+  // ============================================================
+  //  FONCTION 10 : updateLegend
+  //  Ordre d'exécution : 10 (appelée depuis updateMap → 3.10)
+  // ============================================================
+  /**
+   * Objectif   : Supprime l'ancienne légende Leaflet et en crée une nouvelle
+   *              listant les départements colorés avec leur couleur associée.
+   * Entrée     : aucune
+   * Sortie     : aucune
+   * Globales   : legendControl (L.Control), map (L.Map), deptColorMap (Object),
+   *              deptGeoJSON (Object) sont lues et/ou modifiées.
+   *
+   * Appels internes :
+   *   10.1 normalizeDeptName()
+   */
+  function updateLegend() {
+    // Supprimer l'ancienne légende si elle existe
+    if (legendControl) {
+      map.removeControl(legendControl);
+      legendControl = null;
+    }
+
+    if (Object.keys(deptColorMap).length === 0) return;
+
+    // Créer un contrôle Leaflet personnalisé pour la légende
+    legendControl = L.control({ position: 'bottomleft' });
+
+    legendControl.onAdd = function() {
+      const div = L.DomUtil.create('div', 'legend-control');
+      div.innerHTML = '<h4>Départements</h4>';
+
+      // Reconstruire la correspondance nom affiché → couleur
+      // en parcourant le GeoJSON pour retrouver les noms complets
+      const displayed = {};
+      if (deptGeoJSON) {
+        deptGeoJSON.features.forEach(f => {
+          const nom  = f.properties.nom  || '';
+          const code = f.properties.code || '';
+          const norm = normalizeDeptName(nom); // 10.1
+          if (deptColorMap[norm]) {
+            displayed[`${nom} (${code})`] = deptColorMap[norm];
+          }
+        });
+      }
+
+      // Injecter chaque entrée de légende dans le div
+      Object.entries(displayed).forEach(([name, color]) => {
+        div.innerHTML += `
+          <div class="legend-item">
+            <div class="legend-color" style="background:${color}"></div>
+            <span>${name}</span>
+          </div>`;
+      });
+
+      return div;
+    };
+
+    legendControl.addTo(map);
+  }
+
+  // ============================================================
+  //  GESTION DES FILTRES DYNAMIQUES
+  // ============================================================
+
+  // ============================================================
+  //  FONCTION 11 : buildFilterBar
+  //  Ordre d'exécution : 11 (appelée depuis onGristOptions → 17.1,
+  //                          grist.onRecords → 18.1, saveConfig → 16.1)
+  // ============================================================
+  /**
+   * Objectif   : Construit dynamiquement la barre de filtres en injectant
+   *              un select multiple par colonne configurée (région, département,
+   *              puis filtres personnalisés), et peuple ces selects avec les
+   *              valeurs disponibles dans allRecords.
+   * Entrée     : aucune
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : config (Object), allRecords (Array) sont lues.
+   *
+   * Appels internes :
+   *   11.1 populateAllFilters()
+   *   11.2 reactiveFilters() (enregistré comme listener sur chaque select)
+   */
+  function buildFilterBar() {
+    const bar = document.getElementById('filter-bar');
+    // Supprimer les anciens groupes de filtres (mais pas les boutons)
+    bar.querySelectorAll('.filter-group').forEach(el => el.remove());
+
+    // Construire la liste complète des filtres à afficher
+    // Ordre : région, département, puis filtres personnalisés
+    const allFilters = [];
+    if (config.colRegion) allFilters.push({ col: config.colRegion, label: 'Région' });
+    if (config.colDept)   allFilters.push({ col: config.colDept,   label: 'Département' });
+    config.filterCols.forEach(col => {
+      if (col) allFilters.push({ col, label: col });
+    });
+
+    const noMsg = document.getElementById('no-filter-msg');
+
+    if (allFilters.length === 0) {
+      noMsg.style.display = 'inline';
+      return;
+    }
+    noMsg.style.display = 'none';
+
+    const btnReset  = document.getElementById('btn-reset');
+
+    allFilters.forEach(({ col, label }) => {
+      const group = document.createElement('div');
+      group.className = 'filter-group';
+      group.dataset.col = col; // Stocker la colonne associée pour la retrouver facilement
+
+      const lbl = document.createElement('label');
+      lbl.textContent = label;
+
+      const sel = document.createElement('select');
+      sel.multiple = true;
+      sel.dataset.col = col;
+
+      // Lors d'une sélection → mettre à jour les autres filtres en cascade
+      sel.addEventListener('change', () => reactiveFilters(col)); // 11.2
+
+      group.appendChild(lbl);
+      group.appendChild(sel);
+      bar.insertBefore(group, btnReset);
+    });
+
+    // Peupler les selects avec toutes les valeurs disponibles
+    populateAllFilters(allRecords); // 11.1
+  }
+
+  // ============================================================
+  //  FONCTION 12 : populateAllFilters
+  //  Ordre d'exécution : 12 (appelée depuis buildFilterBar → 11.1,
+  //                          resetFilters → 14.2, reactiveFilters → 13.1)
+  // ============================================================
+  /**
+   * Objectif   : Remplit tous les selects de filtre avec les valeurs distinctes
+   *              extraites d'un jeu d'enregistrements, en conservant les sélections
+   *              déjà actives si les valeurs sont toujours présentes.
+   * Entrée     : records (Array<Object>) — enregistrements servant de source
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : aucune.
+   */
+  function populateAllFilters(records) {
+    document.querySelectorAll('.filter-group select').forEach(sel => {
+      const col = sel.dataset.col;
+      // Mémoriser les valeurs actuellement sélectionnées
+      const selected = Array.from(sel.selectedOptions).map(o => o.value);
+
+      // Collecter les valeurs distinctes triées alphabétiquement pour cette colonne
+      const values = [...new Set(
+        records
+          .map(r => r[col])
+          .filter(v => v !== undefined && v !== null && v !== '')
+          .map(v => String(v).trim())
+      )].sort((a, b) => a.localeCompare(b, 'fr'));
+
+      sel.innerHTML = '';
+      values.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        // Rétablir la sélection précédente si la valeur est toujours présente
+        if (selected.includes(v)) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  // ============================================================
+  //  FONCTION 13 : reactiveFilters
+  //  Ordre d'exécution : 13 (appelée via event 'change' sur chaque select → 11.2)
+  // ============================================================
+  /**
+   * Objectif   : Met à jour en cascade les options disponibles dans tous les
+   *              autres filtres en tenant compte des sélections déjà actives,
+   *              afin de ne proposer que des combinaisons de valeurs cohérentes.
+   * Entrée     : changedCol (string) — nom de la colonne dont le filtre vient d'être modifié
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : allRecords (Array) est lue.
+   *
+   * Appels internes :
+   *   13.1 getCurrentFilterSelections()
+   */
+  function reactiveFilters(changedCol) {
+    // Obtenir les sélections actuelles de TOUS les filtres
+    const currentSelections = getCurrentFilterSelections(); // 13.1
+
+    // Appliquer tous les filtres SAUF celui de la colonne modifiée
+    // pour calculer les enregistrements compatibles avec les autres sélections actives
+    let compatibleRecords = allRecords.filter(record => {
+      for (const [col, vals] of Object.entries(currentSelections)) {
+        if (col === changedCol) continue; // Ignorer le filtre modifié
+        if (vals.length === 0) continue;  // Filtre vide = pas de restriction
+        const recVal = record[col] !== undefined ? String(record[col]).trim() : '';
+        if (!vals.includes(recVal)) return false;
+      }
+      return true;
+    });
+
+    // Mettre à jour les options de chaque filtre sauf celui qui vient d'être modifié
+    document.querySelectorAll('.filter-group select').forEach(sel => {
+      const col = sel.dataset.col;
+      if (col === changedCol) return; // Ne pas toucher au filtre qui vient de changer
+
+      // Conserver la sélection actuelle de ce filtre
+      const selected = Array.from(sel.selectedOptions).map(o => o.value);
+
+      // Recalculer les valeurs disponibles pour ce filtre sur les données compatibles
+      const values = [...new Set(
+        compatibleRecords
+          .map(r => r[col])
+          .filter(v => v !== undefined && v !== null && v !== '')
+          .map(v => String(v).trim())
+      )].sort((a, b) => a.localeCompare(b, 'fr'));
+
+      sel.innerHTML = '';
+      values.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        // Ne conserver la sélection que si la valeur est toujours compatible
+        if (selected.includes(v)) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  // ============================================================
+  //  FONCTION 14 : getCurrentFilterSelections
+  //  Ordre d'exécution : 14 (appelée depuis reactiveFilters → 13.1,
+  //                          applyCurrentFilters → 15.1)
+  // ============================================================
+  /**
+   * Objectif   : Lit l'état courant de tous les selects de filtre et retourne
+   *              un objet associant chaque colonne à ses valeurs sélectionnées.
+   * Entrée     : aucune
+   * Sortie     : Object<string, Array<string>> — { nomColonne: [valeursSelectionnées] }
+   * Globales   : aucune.
+   */
+  function getCurrentFilterSelections() {
+    const selections = {};
+    document.querySelectorAll('.filter-group select').forEach(sel => {
+      selections[sel.dataset.col] = Array.from(sel.selectedOptions).map(o => o.value);
+    });
+    return selections;
+  }
+
+  // ============================================================
+  //  FONCTION 15 : applyCurrentFilters
+  //  Ordre d'exécution : 15 (appelée depuis updateMap → 3.3)
+  // ============================================================
+  /**
+   * Objectif   : Filtre allRecords en ne conservant que les enregistrements
+   *              dont les valeurs correspondent à toutes les sélections actives.
+   *              Un filtre sans sélection ne restreint pas les résultats.
+   * Entrée     : aucune
+   * Sortie     : Array<Object> — enregistrements correspondant aux filtres actifs
+   * Globales   : allRecords (Array) est lue.
+   *
+   * Appels internes :
+   *   15.1 getCurrentFilterSelections()
+   */
+  function applyCurrentFilters() {
+    const selections = getCurrentFilterSelections(); // 15.1
+
+    return allRecords.filter(record => {
+      for (const [col, vals] of Object.entries(selections)) {
+        if (vals.length === 0) continue; // Filtre vide = pas de restriction
+        const recVal = record[col] !== undefined ? String(record[col]).trim() : '';
+        if (!vals.includes(recVal)) return false;
+      }
+      return true;
+    });
+  }
+
+  // ============================================================
+  //  FONCTION 16 : resetFilters
+  //  Ordre d'exécution : 16 (déclenchée par le clic sur #btn-reset)
+  // ============================================================
+  /**
+   * Objectif   : Désélectionne toutes les options de tous les filtres,
+   *              repopule les selects avec l'intégralité des valeurs disponibles
+   *              et masque le cartouche d'information.
+   * Entrée     : aucune
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : allRecords (Array) est lue.
+   *
+   * Appels internes :
+   *   16.1 populateAllFilters()
+   *   16.2 hideInfoCard()
+   */
+  function resetFilters() {
+    document.querySelectorAll('.filter-group select').forEach(sel => {
+      Array.from(sel.options).forEach(opt => opt.selected = false);
+    });
+    // Rétablir toutes les options disponibles
+    populateAllFilters(allRecords); // 16.1
+    hideInfoCard();                 // 16.2
+  }
+
+  // ============================================================
+  //  GESTION DU PANNEAU DE CONFIGURATION
+  // ============================================================
+
+  // ============================================================
+  //  FONCTION 17 : openConfigPanel
+  //  Ordre d'exécution : 17 (appelée depuis grist.ready → onEditOptions)
+  // ============================================================
+  /**
+   * Objectif   : Ouvre la modale de configuration et pré-remplit tous
+   *              les champs avec les valeurs de la configuration actuelle.
+   * Entrée     : aucune
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : config (Object) est lue.
+   *
+   * Appels internes :
+   *   17.1 renderDynamicList() (×2 : pour infoCols et filterCols)
+   */
+  function openConfigPanel() {
+    document.getElementById('cfg-table').value      = config.tableId   || '';
+    document.getElementById('cfg-col-coords').value = config.colCoords || '';
+    document.getElementById('cfg-col-title').value  = config.colTitle  || '';
+    document.getElementById('cfg-col-region').value = config.colRegion || '';
+    document.getElementById('cfg-col-dept').value   = config.colDept   || '';
+
+    // Remplir les listes dynamiques (infoCols et filterCols)
+    renderDynamicList('list-info-cols',   'info',   config.infoCols);   // 17.1
+    renderDynamicList('list-filter-cols', 'filter', config.filterCols); // 17.1
+
+    document.getElementById('config-panel').classList.add('visible');
+  }
+
+  // ============================================================
+  //  FONCTION 18 : closeConfigPanel
+  //  Ordre d'exécution : 18 (déclenchée par le clic sur #btn-config-cancel
+  //                          ou appelée depuis saveConfig → 22.1)
+  // ============================================================
+  /**
+   * Objectif   : Ferme la modale de configuration en retirant la classe CSS 'visible'.
+   * Entrée     : aucune
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : aucune.
+   */
+  function closeConfigPanel() {
+    document.getElementById('config-panel').classList.remove('visible');
+  }
+
+  // ============================================================
+  //  FONCTION 19 : renderDynamicList
+  //  Ordre d'exécution : 19 (appelée depuis openConfigPanel → 17.1)
+  // ============================================================
+  /**
+   * Objectif   : Vide et reconstruit une liste dynamique dans la configuration
+   *              en créant un item éditable pour chaque valeur existante.
+   * Entrée     : containerId (string) — ID du conteneur HTML cible
+   *              type        (string) — 'info' ou 'filter' (détermine le placeholder)
+   *              values      (Array<string>) — valeurs actuelles à afficher
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : aucune.
+   *
+   * Appels internes :
+   *   19.1 addDynamicItemWithValue()
+   */
+  function renderDynamicList(containerId, type, values) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    const placeholder = type === 'info'
+      ? 'ex: adresse'
+      : 'ex: statut';
+
+    (values || []).forEach(val => {
+      addDynamicItemWithValue(containerId, type, val, placeholder); // 19.1
+    });
+  }
+
+  // ============================================================
+  //  FONCTION 20 : addDynamicItem
+  //  Ordre d'exécution : 20 (appelée depuis les boutons onclick HTML
+  //                          dans le panneau de configuration)
+  // ============================================================
+  /**
+   * Objectif   : Ajoute un item vide (champ texte + bouton suppression)
+   *              dans une liste dynamique de la configuration.
+   * Entrée     : containerId (string) — ID du conteneur HTML cible
+   *              type        (string) — 'info' ou 'filter' (détermine le placeholder)
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : aucune.
+   *
+   * Appels internes :
+   *   20.1 addDynamicItemWithValue()
+   */
+  function addDynamicItem(containerId, type) {
+    const placeholder = type === 'info' ? 'ex: adresse' : 'ex: statut';
+    addDynamicItemWithValue(containerId, type, '', placeholder); // 20.1
+  }
+
+  // ============================================================
+  //  FONCTION 21 : addDynamicItemWithValue
+  //  Ordre d'exécution : 21 (appelée depuis renderDynamicList → 19.1
+  //                          et addDynamicItem → 20.1)
+  // ============================================================
+  /**
+   * Objectif   : Crée et insère dans le conteneur un item dynamique composé
+   *              d'un champ texte pré-rempli et d'un bouton de suppression.
+   * Entrée     : containerId (string)  — ID du conteneur HTML cible
+   *              type        (string)  — 'info' ou 'filter' (non utilisé ici, réservé)
+   *              value       (string)  — valeur initiale du champ texte
+   *              placeholder (string)  — texte d'aide du champ vide
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : aucune.
+   */
+  function addDynamicItemWithValue(containerId, type, value, placeholder) {
+    const container = document.getElementById(containerId);
+    const item = document.createElement('div');
+    item.className = 'dynamic-item';
+
+    const input = document.createElement('input');
+    input.type        = 'text';
+    input.value       = value;
+    input.placeholder = placeholder || 'Nom de colonne';
+
+    const btnDel = document.createElement('button');
+    btnDel.textContent = '✕';
+    btnDel.title       = 'Supprimer';
+    // Suppression de l'item parent au clic sur le bouton ✕
+    btnDel.onclick     = () => item.remove();
+
+    item.appendChild(input);
+    item.appendChild(btnDel);
+    container.appendChild(item);
+  }
+
+  // ============================================================
+  //  FONCTION 22 : readDynamicList
+  //  Ordre d'exécution : 22 (appelée depuis saveConfig → 23.1)
+  // ============================================================
+  /**
+   * Objectif   : Lit toutes les valeurs saisies dans les champs texte
+   *              d'une liste dynamique et retourne un tableau filtré des
+   *              valeurs non vides.
+   * Entrée     : containerId (string) — ID du conteneur HTML source
+   * Sortie     : Array<string> — tableau des noms de colonnes saisis
+   * Globales   : aucune.
+   */
+  function readDynamicList(containerId) {
+    return Array.from(
+      document.querySelectorAll(`#${containerId} .dynamic-item input`)
+    )
+      .map(inp => inp.value.trim())
+      .filter(Boolean); // Exclure les valeurs vides
+  }
+
+  // ============================================================
+  //  FONCTION 23 : saveConfig
+  //  Ordre d'exécution : 23 (déclenchée par le clic sur #btn-config-save)
+  // ============================================================
+  /**
+   * Objectif   : Lit tous les champs du panneau de configuration, valide les
+   *              données, met à jour l'objet config global, persiste dans GRIST
+   *              via grist.setOptions(), puis reconstruit la barre de filtres.
+   * Entrée     : aucune
+   * Sortie     : aucune (modifie config, appelle l'API GRIST, modifie le DOM)
+   * Globales   : config (Object) est écrite.
+   *
+   * Appels internes :
+   *   23.1 readDynamicList() (×2)
+   *   23.2 closeConfigPanel()
+   *   23.3 buildFilterBar()
+   *   23.4 showStatus()
+   */
+  async function saveConfig() {
+    const newConfig = {
+      tableId   : document.getElementById('cfg-table').value.trim(),
+      colCoords : document.getElementById('cfg-col-coords').value.trim(),
+      colTitle  : document.getElementById('cfg-col-title').value.trim(),
+      colRegion : document.getElementById('cfg-col-region').value.trim(),
+      colDept   : document.getElementById('cfg-col-dept').value.trim(),
+      infoCols  : readDynamicList('list-info-cols'),    // 23.1
+      filterCols: readDynamicList('list-filter-cols')   // 23.1
+    };
+
+    // Validation minimale : le nom de table est obligatoire
+    if (!newConfig.tableId) {
+      alert('Le nom de la table est requis.');
+      return;
+    }
+
+    config = newConfig;
+
+    // Persister dans GRIST via l'API
+    await grist.setOptions(config);
+
+    closeConfigPanel(); // 23.2
+
+    // Reconstruire les filtres avec la nouvelle configuration
+    buildFilterBar(); // 23.3
+    showStatus('Configuration sauvegardée. Sélectionnez des filtres puis mettez à jour la carte.'); // 23.4
+  }
+
+  // ============================================================
+  //  UTILITAIRES UI
+  // ============================================================
+
+  // ============================================================
+  //  FONCTION 24 : showLoader
+  //  Ordre d'exécution : 24 (appelée depuis loadDeptGeoJSON → 2.1,
+  //                          updateMap → 3.1)
+  // ============================================================
+  /**
+   * Objectif   : Affiche ou masque l'indicateur de chargement en
+   *              ajoutant/retirant la classe CSS 'visible' sur #loader.
+   * Entrée     : visible (boolean) — true pour afficher, false pour masquer
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : aucune.
+   */
+  function showLoader(visible) {
+    document.getElementById('loader').classList.toggle('visible', visible);
+  }
+
+  // ============================================================
+  //  FONCTION 25 : showStatus
+  //  Ordre d'exécution : 25 (appelée depuis initMap → 1, loadDeptGeoJSON → 2.2,
+  //                          updateMap → 3.4, saveConfig → 23.4,
+   //                         onGristOptions → 26.2)
+  // ============================================================
+  /**
+   * Objectif   : Affiche un message transitoire dans le bandeau flottant #status-msg
+   *              puis le masque automatiquement après un délai configurable.
+   * Entrée     : msg      (string) — texte du message à afficher
+   *              duration (number) — durée d'affichage en ms (défaut : 4000)
+   * Sortie     : aucune (modifie le DOM)
+   * Globales   : statusTimer (number|null) — identifiant du timer précédent, lu et écrit.
+   */
+  let statusTimer = null;
+  function showStatus(msg, duration = 4000) {
+    const el = document.getElementById('status-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    // Annuler l'éventuel timer précédent pour éviter une fermeture prématurée
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => {
+      el.style.display = 'none';
+    }, duration);
+  }
+
+  // ============================================================
+  //  INTÉGRATION GRIST API
+  // ============================================================
+
+  // ============================================================
+  //  FONCTION 26 : onGristOptions
+  //  Ordre d'exécution : 26 (appelée depuis grist.onOptions → callback)
+  // ============================================================
+  /**
+   * Objectif   : Reçoit les options sauvegardées depuis GRIST, met à jour
+   *              l'objet config global, puis charge les données de la table
+   *              configurée via l'API GRIST fetchTable.
+   * Entrée     : options (Object|null) — options sauvegardées dans GRIST
+   * Sortie     : aucune
+   * Globales   : config (Object), allRecords (Array) sont écrites.
+   *
+   * Appels internes :
+   *   26.1 gristTableToRecords()
+   *   26.2 buildFilterBar()
+   *   26.3 showStatus()
+   */
+  function onGristOptions(options) {
+    if (!options) return;
+
+    // Fusionner les options reçues dans config avec les valeurs par défaut
+    config = Object.assign({
+      tableId    : '',
+      colCoords  : '',
+      colTitle   : '',
+      colRegion  : '',
+      colDept    : '',
+      infoCols   : [],
+      filterCols : []
+    }, options);
+
+    // Si une table est configurée, charger ses données via l'API GRIST
+    if (config.tableId) {
+      grist.docApi.fetchTable(config.tableId).then(tableData => {
+        allRecords = gristTableToRecords(tableData); // 26.1
+        buildFilterBar();                            // 26.2
+        showStatus('Données chargées. Sélectionnez des filtres puis mettez à jour la carte.'); // 26.3
+      }).catch(err => {
+        console.error('Erreur fetchTable:', err);
+        showStatus('Erreur lors du chargement de la table : ' + config.tableId); // 26.3
+      });
+    }
+  }
+
+  // ============================================================
+  //  FONCTION 27 : gristTableToRecords
+  //  Ordre d'exécution : 27 (appelée depuis onGristOptions → 26.1)
+  // ============================================================
+  /**
+   * Objectif   : Convertit le format de table GRIST (objet de colonnes parallèles)
+   *              en un tableau d'objets enregistrements exploitables.
+   *              Format GRIST : { col1: [v1,v2,...], col2: [v1,v2,...] }
+   *              Format cible  : [ {col1:v1, col2:v1}, {col1:v2, col2:v2}, ... ]
+   * Entrée     : tableData (Object|null) — données brutes retournées par grist.docApi.fetchTable
+   * Sortie     : Array<Object> — tableau d'enregistrements normalisés
+   * Globales   : aucune.
+   */
+  function gristTableToRecords(tableData) {
+    if (!tableData) return [];
+    const columns = Object.keys(tableData);
+    if (columns.length === 0) return [];
+
+    const length = tableData[columns[0]].length;
+    const records = [];
+
+    for (let i = 0; i < length; i++) {
+      const record = {};
+      columns.forEach(col => {
+        record[col] = tableData[col][i];
+      });
+      records.push(record);
+    }
+    return records;
+  }
+
+  // ============================================================
+  //  ABONNEMENTS GRIST API
+  //  Les trois blocs suivants s'exécutent immédiatement au chargement
+  //  de la page et enregistrent des callbacks auprès de l'API GRIST
+  // ============================================================
+
+  /**
+   * Abonnement GRIST : réception des enregistrements en mode "Linked widget".
+   * GRIST transmet automatiquement les enregistrements de la table liée ;
+   * on peuple allRecords et on reconstruit la barre de filtres.
+   * Globales modifiées : allRecords (Array).
+   * Appelle : buildFilterBar()
+   */
+  grist.onRecords(records => {
+    if (!records || records.length === 0) return;
+    allRecords = records;
+    buildFilterBar();
+  });
+
+  /**
+   * Abonnement GRIST : réception des options sauvegardées du widget.
+   * Déclenché à l'initialisation et à chaque modification des options.
+   * Appelle : onGristOptions()
+   */
+  grist.onOptions((options) => {
+    onGristOptions(options);
+  });
+
+  /**
+   * Déclaration du widget auprès de GRIST avec le niveau d'accès requis.
+   * Le callback onEditOptions est invoqué par GRIST quand l'utilisateur
+   * ouvre le panneau de configuration du widget.
+   * Appelle : openConfigPanel()
+   */
+  grist.ready({
+    requiredAccess: 'read table',
+    onEditOptions : () => {
+      openConfigPanel();
+    }
+  });
+
+  // ============================================================
+  //  ÉVÉNEMENTS BOUTONS
+  //  Liaison des gestionnaires d'événements aux boutons de l'interface
+  // ============================================================
+
+  // Déclenchement de la mise à jour cartographique au clic sur "Mettre à jour la carte"
+  document.getElementById('btn-update').addEventListener('click', updateMap);
+
+  // Réinitialisation de tous les filtres au clic sur "Reset"
+  document.getElementById('btn-reset').addEventListener('click', resetFilters);
+
+  // Fermeture du cartouche d'information au clic sur la croix
+  document.getElementById('info-card-close').addEventListener('click', hideInfoCard);
+
+  // Sauvegarde de la configuration au clic sur "Enregistrer"
+  document.getElementById('btn-config-save').addEventListener('click', saveConfig);
+
+  // Fermeture sans sauvegarde de la configuration au clic sur "Annuler"
+  document.getElementById('btn-config-cancel').addEventListener('click', closeConfigPanel);
+
+  // ============================================================
+  //  DÉMARRAGE
+  //  Initialisation synchrone de la carte puis pré-chargement
+  //  asynchrone du GeoJSON pour accélérer le premier rendu
+  // ============================================================
+
+  // Initialisation de la carte Leaflet (synchrone)
+  initMap();
+
+  // Pré-chargement du GeoJSON des départements en arrière-plan
+  loadDeptGeoJSON();
+
+  </script>
+</body>
+</html>
